@@ -1,40 +1,42 @@
 # @openclaw/solana-blinks
 
-Production-ready Solana Blinks CLI and SDK with full [Dialect Standard Blinks Library (SBL)](https://docs.dialect.to/markets/supported-protocols) coverage.
+Production-ready Solana Blinks CLI and SDK with direct [Solana Actions](https://solana.com/developers/guides/advanced/actions) integration.
 
 ## Features
 
-- 🔗 **Full SBL Coverage** - All 20 Dialect-supported protocols
-- 🤖 **AI-Agent Ready** - JSON output, structured errors, minimal dependencies
+- 🔗 **Direct Solana Actions** - No external API dependencies
+- 🤖 **AI-Agent Ready** - JSON output, structured errors
 - ⚡ **Zero Config** - Works with just RPC URL and private key
-- 📊 **Unified Markets API** - Browse all DeFi opportunities in one place
-- 💰 **Position Tracking** - Monitor your positions across protocols
-- 🔧 **Programmatic SDK** - Use as a library in your TypeScript projects
+- 🔒 **Trust Verification** - Validates against trusted host registry
+- 🔧 **Full SDK** - Use as a library in your TypeScript projects
+
+## Architecture
+
+This package implements the Solana Actions specification directly:
+
+1. **GET** request to action URL → returns metadata + available actions
+2. **POST** request with `{ account }` → returns transaction to sign
+3. Sign and submit transaction to Solana
+
+No Dialect API dependency - communicates directly with protocol action endpoints.
 
 ## Supported Protocols
 
-| Protocol | Type | Markets API | Positions API | Blinks |
-|----------|------|-------------|---------------|--------|
-| Kamino Lend | Yield | ✅ | ✅ | ✅ |
-| Kamino Borrow | Lending | ✅ | ✅ | ✅ |
-| Kamino Multiply | Loop | ✅ | ✅ | ✅ |
-| Kamino Leverage | Loop | ✅ | 🔨 | ✅ |
-| MarginFi | Lending | ✅ | 🔨 | ✅ |
-| Jupiter Lend Earn | Yield | ✅ | ✅ | ✅ |
-| Jupiter Lend Borrow | Lending | ✅ | ✅ | ✅ |
-| Raydium AMM | AMM | 🔨 | 🔨 | ✅ |
-| Raydium CLMM | AMM | 🔨 | 🔨 | ✅ |
-| Orca Whirlpools | AMM | 🔨 | 🔨 | ✅ |
-| Meteora DLMM | AMM | 🔨 | 🔨 | ✅ |
-| Drift Vaults | Perps | 🔨 | 🔨 | ✅ |
-| Lulo Protected | Yield | ✅ | ✅ | ✅ |
-| Lulo Boosted | Yield | ✅ | ✅ | ✅ |
-| Save Protocol | Yield | 🔨 | 🔨 | ✅ |
-| DeFiTuna | Yield | ✅ | 🔨 | ✅ |
-| DeFiCarrot | Yield | ✅ | 🔨 | ✅ |
-| DFlow | Prediction | ✅ | ✅ | 🔨 |
+| Protocol | Type | Actions Available |
+|----------|------|-------------------|
+| Kamino | Lending/Yield | ✅ deposit, withdraw, borrow, repay, multiply |
+| Jupiter | Swap/Lending | ✅ swap, lend, borrow |
+| Raydium | AMM | ✅ swap, liquidity |
+| Orca | AMM | ✅ swap, liquidity |
+| Meteora | DLMM | ✅ add/remove liquidity |
+| Drift | Perps | ✅ vault deposit/withdraw |
+| Lulo | Yield | ✅ deposit, withdraw |
+| Sanctum | LST Staking | ✅ stake, unstake |
+| Jito | Staking | ✅ stake |
+| Tensor | NFT | ✅ buy, list |
+| Magic Eden | NFT | ✅ buy |
 
-✅ Available | 🔨 Coming Soon
+Plus 50+ more trusted hosts for arbitrary action execution.
 
 ## Installation
 
@@ -52,14 +54,9 @@ Create a `.env` file or set environment variables:
 # Required
 SOLANA_RPC_URL=https://api.mainnet-beta.solana.com
 SOLANA_PRIVATE_KEY=your-base58-private-key
-
-# Optional
-DIALECT_API_KEY=your-api-key  # For higher rate limits
 ```
 
 ### Private Key Formats
-
-The CLI accepts private keys in two formats:
 
 1. **Base58** (recommended): `5abc123...`
 2. **JSON Array**: `[1,2,3,4,...]` (Solana CLI format)
@@ -74,165 +71,156 @@ blinks status
 blinks wallet address
 blinks wallet balance
 
-# Browse markets
-blinks markets list --type=yield
-blinks markets best-yield --limit=5
+# Inspect any action URL
+blinks inspect "https://jito.dial.to/stake"
 
-# View positions
-blinks positions
-
-# Execute a deposit
-blinks kamino deposit --vault=usdc-prime --amount=100 --dry-run
+# Execute an action
+blinks jito stake --amount=1 --dry-run
+blinks jito stake --amount=1
 ```
 
 ## CLI Commands
 
-### Markets
+### Inspect & Execute
 
 ```bash
-# List by type
-blinks markets list --type=lending|yield|loop|perp|prediction
+# Inspect any blink/action URL
+blinks inspect <url>
 
-# Filter by provider
-blinks markets list --provider=kamino|marginfi|jupiter|lulo
+# Execute with parameters
+blinks execute <url> --amount=100
+blinks execute <url> -p '{"inputMint":"...", "outputMint":"..."}'
 
-# Combined filters
-blinks markets list --type=yield --provider=kamino --min-apy=0.05
-
-# Best opportunities
-blinks markets best-yield --limit=10
-blinks markets best-borrow --limit=10
-
-# Search by token
-blinks markets search USDC
+# Dry run (simulation only)
+blinks execute <url> --dry-run
 ```
 
-### Protocol-Specific
+### Protocol Commands
 
 ```bash
 # Kamino
-blinks kamino markets --type=lend
-blinks kamino deposit --vault=<slug> --amount=100
-blinks kamino withdraw --vault=<slug> --amount=50
+blinks kamino deposit --vault=usdc-prime --amount=100
+blinks kamino withdraw --vault=usdc-prime --amount=50
 blinks kamino borrow --market=<addr> --reserve=<addr> --amount=100
 blinks kamino repay --market=<addr> --reserve=<addr> --amount=50
 blinks kamino multiply --market=<addr> --coll-token=<mint> --debt-token=<mint> --amount=1
 
-# MarginFi
-blinks marginfi markets
-blinks marginfi deposit --market=<id> --amount=100
-
 # Jupiter
-blinks jupiter-lend markets --type=earn
-blinks jupiter-lend deposit --market=<id> --amount=100
+blinks jupiter swap --input=<mint> --output=<mint> --amount=100
 
 # Lulo
-blinks lulo markets --type=protected
-blinks lulo deposit --market=<id> --amount=100
+blinks lulo deposit --token=<mint> --amount=100
+blinks lulo withdraw --token=<mint> --amount=50
 
 # Drift
-blinks drift vaults
-blinks drift vault-deposit --vault=<id> --amount=100
+blinks drift vault-deposit --vault=<addr> --amount=100
+blinks drift vault-withdraw --vault=<addr> --amount=50
+
+# Sanctum (LST Staking)
+blinks sanctum stake --lst=<mint> --amount=1
+
+# Jito
+blinks jito stake --amount=1
+
+# Raydium
+blinks raydium swap --input=<mint> --output=<mint> --amount=100
 ```
 
-### Blinks Execution
+### Utilities
 
 ```bash
-# Inspect any blink URL
-blinks inspect "blink:https://..."
-
-# Execute with parameters
-blinks execute "blink:https://..." --amount=100
-
-# Dry run
-blinks execute "blink:https://..." --amount=100 --dry-run
+blinks protocols        # List all supported protocols
+blinks trusted-hosts    # List verified action hosts
+blinks status           # Check RPC and wallet configuration
 ```
 
 ### Output Formats
 
 ```bash
-blinks markets list -f json     # JSON (default)
-blinks markets list -f table    # ASCII table
-blinks markets list -f minimal  # Key=value
-blinks markets list -q          # Quiet mode
+blinks inspect <url> -f json     # JSON (default)
+blinks inspect <url> -f table    # ASCII table
+blinks inspect <url> -f minimal  # Key=value
+blinks inspect <url> -q          # Quiet mode
 ```
 
 ## SDK Usage
 
 ```typescript
 import {
-  DialectClient,
+  ActionsClient,
   BlinksExecutor,
   Wallet,
   getConnection,
+  TRUSTED_HOSTS,
 } from '@openclaw/solana-blinks';
 
 // Initialize
-const dialect = new DialectClient();
+const actions = new ActionsClient();
 const connection = getConnection();
 const wallet = Wallet.fromEnv();
 const blinks = new BlinksExecutor(connection);
 
-// Get markets
-const yieldMarkets = await dialect.getMarkets({ type: 'yield' });
-const bestYield = await dialect.getBestYieldMarkets(10);
+// Inspect an action URL
+const inspection = await blinks.inspect('https://jito.dial.to/stake');
+console.log(inspection.metadata);      // { title, description, icon }
+console.log(inspection.actions);       // Available actions with parameters
+console.log(inspection.trusted);       // Is this from a trusted host?
 
-// Get positions
-const positions = await dialect.getPositions(wallet.address);
+// Get action metadata (GET request)
+const metadata = await actions.getAction('https://jito.dial.to/stake');
 
-// Execute blink
-const market = yieldMarkets[0];
-const blinkUrl = market.actions.deposit?.blinkUrl;
+// Get transaction (POST request)
+const tx = await actions.postAction(
+  'https://jito.dial.to/stake',
+  wallet.address,
+  { amount: '1' }
+);
 
-if (blinkUrl) {
-  const tx = await blinks.getTransaction(blinkUrl, wallet.address, {
-    amount: '100',
-  });
-  
-  // Simulate first
-  const sim = await blinks.simulate(tx);
-  console.log('Simulation:', sim);
-  
-  // Execute
-  const signature = await blinks.signAndSend(tx, wallet.getSigner());
-  console.log('Confirmed:', signature);
-}
+// Simulate
+const sim = await blinks.simulate(tx);
+console.log('Success:', sim.success);
+console.log('Units consumed:', sim.unitsConsumed);
+
+// Execute
+const signature = await blinks.signAndSend(tx, wallet.getSigner());
+console.log('Confirmed:', signature);
+console.log('Explorer:', `https://solscan.io/tx/${signature}`);
 ```
 
 ### TypeScript Types
 
 ```typescript
 import type {
-  Market,
-  Position,
-  YieldMarket,
-  LendingMarket,
-  LoopMarket,
+  BlinkMetadata,
+  BlinkTransaction,
+  BlinkParameter,
+  BlinkLinkAction,
   ProtocolId,
   MarketType,
-  MarketFilter,
 } from '@openclaw/solana-blinks';
 ```
 
 ## API Reference
 
-### DialectClient
+### ActionsClient
 
 ```typescript
-const client = new DialectClient({ apiKey?: string, baseUrl?: string });
+const client = new ActionsClient({ timeout?: number });
 
-// Markets
-client.getMarkets(filter?: MarketFilter): Promise<Market[]>
-client.getMarketsGrouped(): Promise<MarketsGroupedResponse>
-client.getMarketsByProtocol(protocol: ProtocolId): Promise<Market[]>
-client.getMarketsByType(type: MarketType): Promise<Market[]>
-client.getBestYieldMarkets(limit?: number): Promise<Market[]>
-client.getBestBorrowRates(limit?: number): Promise<Market[]>
-client.searchMarketsByToken(symbol: string): Promise<Market[]>
+// Parse action URL (handles solana-action:, blink:, dial.to interstitial)
+client.parseActionUrl(url: string): string
 
-// Positions
-client.getPositions(wallet: string, filter?: PositionFilter): Promise<Position[]>
-client.getHistoricalPositions(wallet: string, start?: Date, end?: Date): Promise<...>
+// Check if URL is from trusted host
+client.isTrustedHost(url: string): boolean
+
+// GET - fetch action metadata
+client.getAction(url: string): Promise<BlinkMetadata>
+
+// POST - get transaction to sign
+client.postAction(url: string, account: string, params?: Record<string, any>): Promise<BlinkTransaction>
+
+// Inspect - full inspection with parsed actions
+client.inspect(url: string): Promise<InspectResult>
 ```
 
 ### BlinksExecutor
@@ -240,11 +228,12 @@ client.getHistoricalPositions(wallet: string, start?: Date, end?: Date): Promise
 ```typescript
 const executor = new BlinksExecutor(connection: Connection);
 
-executor.getMetadata(blinkUrl: string): Promise<BlinkMetadata>
-executor.getTransaction(blinkUrl: string, wallet: string, params?: Record<string, any>): Promise<BlinkTransaction>
+executor.getMetadata(url: string): Promise<BlinkMetadata>
+executor.getTransaction(url: string, wallet: string, params?: Record<string, any>): Promise<BlinkTransaction>
 executor.simulate(tx: BlinkTransaction): Promise<SimulationResult>
 executor.signAndSend(tx: BlinkTransaction, signer: Signer): Promise<string>
-executor.inspect(blinkUrl: string): Promise<InspectResult>
+executor.inspect(url: string): Promise<InspectResult>
+executor.isTrustedHost(url: string): boolean
 ```
 
 ### Wallet
@@ -265,11 +254,14 @@ wallet.getAllBalances(connection: Connection): Promise<WalletBalance[]>
 ## Error Handling
 
 ```typescript
+import { ActionError } from '@openclaw/solana-blinks';
+
 try {
-  await client.getMarkets();
+  await client.getAction('https://invalid.url/action');
 } catch (error) {
-  if (error.message.includes('Dialect API error')) {
-    // API error
+  if (error instanceof ActionError) {
+    console.log('Status:', error.statusCode);
+    console.log('Details:', error.details);
   }
 }
 ```
@@ -277,8 +269,9 @@ try {
 CLI errors return JSON:
 ```json
 {
-  "error": "Market not found",
-  "code": "NOT_FOUND"
+  "error": "Failed to fetch action: 404 Not Found",
+  "code": 404,
+  "details": "Action endpoint not available"
 }
 ```
 
@@ -289,7 +282,7 @@ git clone https://github.com/openclaw/solana-blinks-skill
 cd solana-blinks-skill
 npm install
 npm run build
-npm run dev -- markets list
+npm run dev -- inspect https://jito.dial.to/stake
 ```
 
 ## License
@@ -298,6 +291,7 @@ MIT
 
 ## Links
 
-- [Dialect Documentation](https://docs.dialect.to/markets)
-- [Solana Actions Spec](https://docs.dialect.to/documentation/actions/actions-and-blinks)
+- [Solana Actions Spec](https://solana.com/developers/guides/advanced/actions)
+- [Blinks Inspector](https://www.blinks.xyz/inspector)
+- [Dialect Registry](https://dial.to/register)
 - [OpenClaw](https://openclaw.io)

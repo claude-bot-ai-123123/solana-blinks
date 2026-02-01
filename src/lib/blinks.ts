@@ -1,93 +1,87 @@
 /**
  * Blinks Executor
  * Fetch, parse, and execute Solana Actions (Blinks)
+ * 
+ * Uses direct Solana Actions specification:
+ * - GET request to action URL → returns metadata + available actions
+ * - POST request with account → returns transaction to sign
+ * - Sign and submit transaction
  */
 
 import { Connection, Transaction, VersionedTransaction, PublicKey } from '@solana/web3.js';
 import type { BlinkMetadata, BlinkTransaction, BlinkParameter } from '../types/index.js';
+import { ActionsClient, ActionError, TRUSTED_HOSTS } from './actions.js';
 
 /**
  * Parse a blink URL to extract the action URL
- * Format: blink:https://... or https://...
+ * Supports multiple formats:
+ * - solana-action:https://...
+ * - blink:https://... 
+ * - https://dial.to/?action=...
+ * - https://... (direct action URL)
  */
 export function parseBlinkUrl(blinkUrl: string): string {
+  // Handle solana-action: protocol
+  if (blinkUrl.startsWith('solana-action:')) {
+    return blinkUrl.slice(14);
+  }
+  
+  // Handle blink: protocol (our internal format)
   if (blinkUrl.startsWith('blink:')) {
     return blinkUrl.slice(6);
   }
+  
+  // Handle dial.to interstitial URLs
+  if (blinkUrl.includes('dial.to') && blinkUrl.includes('action=')) {
+    const urlObj = new URL(blinkUrl);
+    const actionParam = urlObj.searchParams.get('action');
+    if (actionParam) {
+      return decodeURIComponent(actionParam);
+    }
+  }
+  
   return blinkUrl;
 }
 
 /**
  * Blinks Executor for Solana Actions
+ * Implements the full action lifecycle:
+ * 1. Fetch metadata (GET)
+ * 2. Get transaction (POST with account)
+ * 3. Sign and submit
  */
 export class BlinksExecutor {
   private connection: Connection;
+  private actionsClient: ActionsClient;
 
-  constructor(connection: Connection) {
+  constructor(connection: Connection, options?: { timeout?: number }) {
     this.connection = connection;
+    this.actionsClient = new ActionsClient(options);
   }
 
   /**
    * Fetch blink metadata (GET request)
+   * Returns action info: title, description, icon, available actions
    */
   async getMetadata(blinkUrl: string): Promise<BlinkMetadata> {
-    const url = parseBlinkUrl(blinkUrl);
-    
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch blink metadata: ${response.status} ${response.statusText}`);
-    }
-
-    return response.json() as Promise<BlinkMetadata>;
+    return this.actionsClient.getAction(blinkUrl);
   }
 
   /**
    * Execute a blink action (POST request)
-   * Returns the serialized transaction
+   * Returns the serialized transaction to sign
    */
   async getTransaction(
     blinkUrl: string,
     walletAddress: string,
     params?: Record<string, string | number>
   ): Promise<BlinkTransaction> {
-    let url = parseBlinkUrl(blinkUrl);
-    
-    // Add parameters to URL
-    if (params && Object.keys(params).length > 0) {
-      const urlObj = new URL(url);
-      Object.entries(params).forEach(([key, value]) => {
-        urlObj.searchParams.set(key, String(value));
-      });
-      url = urlObj.toString();
-    }
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        account: walletAddress,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => 'Unknown error');
-      throw new Error(`Failed to get blink transaction: ${response.status} - ${errorText}`);
-    }
-
-    return response.json() as Promise<BlinkTransaction>;
+    return this.actionsClient.postAction(blinkUrl, walletAddress, params);
   }
 
   /**
    * Decode a transaction from base64
+   * Automatically handles both legacy and versioned transactions
    */
   decodeTransaction(base64Tx: string): Transaction | VersionedTransaction {
     const buffer = Buffer.from(base64Tx, 'base64');
@@ -138,6 +132,7 @@ export class BlinksExecutor {
 
   /**
    * Simulate a blink transaction
+   * Useful for dry runs and estimating compute units
    */
   async simulate(blinkTx: BlinkTransaction): Promise<{
     success: boolean;
@@ -163,10 +158,11 @@ export class BlinksExecutor {
   }
 
   /**
-   * Inspect a blink URL - fetch metadata and display info
+   * Inspect a blink URL - fetch metadata and display all available actions
    */
   async inspect(blinkUrl: string): Promise<{
     url: string;
+    trusted: boolean;
     metadata: BlinkMetadata;
     actions: Array<{
       label: string;
@@ -174,58 +170,40 @@ export class BlinksExecutor {
       parameters?: BlinkParameter[];
     }>;
   }> {
-    const url = parseBlinkUrl(blinkUrl);
-    const metadata = await this.getMetadata(blinkUrl);
-    
-    const actions: Array<{
-      label: string;
-      href: string;
-      parameters?: BlinkParameter[];
-    }> = [];
-
-    // Add main action if present
-    if (metadata.label && !metadata.links?.actions?.length) {
-      actions.push({
-        label: metadata.label,
-        href: url,
-      });
-    }
-
-    // Add linked actions
-    if (metadata.links?.actions) {
-      for (const action of metadata.links.actions) {
-        actions.push({
-          label: action.label,
-          href: action.href.startsWith('http') ? action.href : `${new URL(url).origin}${action.href}`,
-          parameters: action.parameters,
-        });
-      }
-    }
-
-    return {
-      url,
-      metadata,
-      actions,
-    };
+    return this.actionsClient.inspect(blinkUrl);
   }
 
   /**
    * Build action URL with parameters
    */
   buildActionUrl(baseUrl: string, params: Record<string, string | number>): string {
-    const url = new URL(parseBlinkUrl(baseUrl));
-    Object.entries(params).forEach(([key, value]) => {
-      url.searchParams.set(key, String(value));
-    });
-    return url.toString();
+    return this.actionsClient.buildActionUrl(baseUrl, params);
+  }
+
+  /**
+   * Check if a URL is from a trusted action host
+   */
+  isTrustedHost(url: string): boolean {
+    return this.actionsClient.isTrustedHost(url);
+  }
+
+  /**
+   * Get the underlying ActionsClient for advanced usage
+   */
+  getActionsClient(): ActionsClient {
+    return this.actionsClient;
   }
 }
 
 /**
  * Create a BlinksExecutor instance
  */
-export function createBlinksExecutor(connection: Connection): BlinksExecutor {
-  return new BlinksExecutor(connection);
+export function createBlinksExecutor(
+  connection: Connection,
+  options?: { timeout?: number }
+): BlinksExecutor {
+  return new BlinksExecutor(connection, options);
 }
 
+export { ActionError, TRUSTED_HOSTS };
 export default BlinksExecutor;

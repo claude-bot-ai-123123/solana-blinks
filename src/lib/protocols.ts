@@ -1,15 +1,175 @@
 /**
  * Protocol-Specific Handlers
- * Covers all 20 Dialect Standard Blinks Library (SBL) protocols
+ * Direct Solana Actions integration for DeFi protocols
+ * 
+ * Uses direct protocol action endpoints per the Solana Actions spec:
+ * - GET to action URL → metadata + available actions
+ * - POST with account → transaction to sign
  */
 
 import type { Market, Position, ProtocolId, MarketType } from '../types/index.js';
-import { DialectClient } from './dialect.js';
+import { ActionsClient, PROTOCOL_ACTIONS, TRUSTED_HOSTS } from './actions.js';
 import { BlinksExecutor } from './blinks.js';
 import type { Connection } from '@solana/web3.js';
 
 /**
- * Protocol metadata for all SBL protocols
+ * Known action endpoints for major DeFi protocols
+ * These are direct URLs that implement the Solana Actions specification
+ */
+export const PROTOCOL_ACTION_ENDPOINTS: Record<string, {
+  displayName: string;
+  category: string;
+  website: string;
+  actions: Record<string, string>;
+  trustedHosts: string[];
+}> = {
+  kamino: {
+    displayName: 'Kamino Finance',
+    category: 'lending-yield',
+    website: 'https://kamino.finance',
+    actions: {
+      // Kamino Lend (yield vaults)
+      'lend-deposit': 'https://kamino.dial.to/api/v0/lend/{vault}/deposit',
+      'lend-withdraw': 'https://kamino.dial.to/api/v0/lend/{vault}/withdraw',
+      // Kamino Lending (borrow)
+      'lending-deposit': 'https://kamino.dial.to/api/v0/lending/reserve/{market}/{reserve}/deposit',
+      'lending-withdraw': 'https://kamino.dial.to/api/v0/lending/reserve/{market}/{reserve}/withdraw',
+      'lending-borrow': 'https://kamino.dial.to/api/v0/lending/reserve/{market}/{reserve}/borrow',
+      'lending-repay': 'https://kamino.dial.to/api/v0/lending/reserve/{market}/{reserve}/repay',
+      // Kamino Multiply (loop)
+      'multiply-deposit': 'https://kamino.dial.to/api/v0/multiply/{market}/deposit',
+      'multiply-withdraw': 'https://kamino.dial.to/api/v0/multiply/{market}/withdraw',
+    },
+    trustedHosts: ['kamino.dial.to', 'app.kamino.finance'],
+  },
+  
+  marginfi: {
+    displayName: 'MarginFi',
+    category: 'lending',
+    website: 'https://marginfi.com',
+    actions: {
+      deposit: 'https://marginfi.dial.to/api/v0/deposit',
+      withdraw: 'https://marginfi.dial.to/api/v0/withdraw',
+      borrow: 'https://marginfi.dial.to/api/v0/borrow',
+      repay: 'https://marginfi.dial.to/api/v0/repay',
+    },
+    trustedHosts: ['marginfi.dial.to', 'app.marginfi.com'],
+  },
+  
+  jupiter: {
+    displayName: 'Jupiter',
+    category: 'swap-lending',
+    website: 'https://jup.ag',
+    actions: {
+      swap: 'https://jupiter.dial.to/api/v0/swap',
+      'lend-deposit': 'https://jupiter.dial.to/api/v0/perps/earn/deposit',
+      'lend-withdraw': 'https://jupiter.dial.to/api/v0/perps/earn/withdraw',
+    },
+    trustedHosts: ['jupiter.dial.to', 'jup.ag'],
+  },
+  
+  raydium: {
+    displayName: 'Raydium',
+    category: 'amm',
+    website: 'https://raydium.io',
+    actions: {
+      'swap': 'https://share.raydium.io/swap',
+      'add-liquidity': 'https://share.raydium.io/liquidity/add',
+      'remove-liquidity': 'https://share.raydium.io/liquidity/remove',
+    },
+    trustedHosts: ['share.raydium.io', 'raydium.dial.to'],
+  },
+  
+  orca: {
+    displayName: 'Orca',
+    category: 'amm',
+    website: 'https://orca.so',
+    actions: {
+      swap: 'https://orca.dial.to/api/v0/swap',
+      'add-liquidity': 'https://orca.dial.to/api/v0/liquidity/add',
+      'remove-liquidity': 'https://orca.dial.to/api/v0/liquidity/remove',
+    },
+    trustedHosts: ['orca.dial.to', 'orca.so'],
+  },
+  
+  meteora: {
+    displayName: 'Meteora',
+    category: 'amm',
+    website: 'https://meteora.ag',
+    actions: {
+      'add-liquidity': 'https://meteora.dial.to/api/v0/dlmm/add',
+      'remove-liquidity': 'https://meteora.dial.to/api/v0/dlmm/remove',
+    },
+    trustedHosts: ['meteora.dial.to', 'app.meteora.ag'],
+  },
+  
+  drift: {
+    displayName: 'Drift Protocol',
+    category: 'perps',
+    website: 'https://drift.trade',
+    actions: {
+      'vault-deposit': 'https://app.drift.trade/api/actions/vault/deposit',
+      'vault-withdraw': 'https://app.drift.trade/api/actions/vault/withdraw',
+    },
+    trustedHosts: ['app.drift.trade', 'drift.dial.to'],
+  },
+  
+  lulo: {
+    displayName: 'Lulo',
+    category: 'yield',
+    website: 'https://lulo.fi',
+    actions: {
+      deposit: 'https://blink.lulo.fi/api/actions/deposit',
+      withdraw: 'https://blink.lulo.fi/api/actions/withdraw',
+    },
+    trustedHosts: ['blink.lulo.fi', 'lulo.dial.to'],
+  },
+  
+  sanctum: {
+    displayName: 'Sanctum',
+    category: 'staking',
+    website: 'https://sanctum.so',
+    actions: {
+      stake: 'https://sanctum.dial.to/api/v0/stake',
+      unstake: 'https://sanctum.dial.to/api/v0/unstake',
+    },
+    trustedHosts: ['sanctum.dial.to', 'sanctum.so'],
+  },
+  
+  jito: {
+    displayName: 'Jito',
+    category: 'staking',
+    website: 'https://jito.network',
+    actions: {
+      stake: 'https://jito.dial.to/stake',
+    },
+    trustedHosts: ['jito.dial.to', 'jito.network'],
+  },
+  
+  tensor: {
+    displayName: 'Tensor',
+    category: 'nft',
+    website: 'https://tensor.trade',
+    actions: {
+      buy: 'https://tensor.dial.to/api/v0/buy',
+      list: 'https://tensor.dial.to/api/v0/list',
+    },
+    trustedHosts: ['tensor.dial.to', 'tensor.trade'],
+  },
+  
+  magiceden: {
+    displayName: 'Magic Eden',
+    category: 'nft',
+    website: 'https://magiceden.io',
+    actions: {
+      buy: 'https://api-mainnet.magiceden.dev/v2/actions/buy',
+    },
+    trustedHosts: ['api-mainnet.magiceden.dev', 'magiceden.dev'],
+  },
+};
+
+/**
+ * Protocol metadata for all supported protocols
  */
 export const PROTOCOLS: Record<ProtocolId, {
   name: string;
@@ -21,6 +181,7 @@ export const PROTOCOLS: Record<ProtocolId, {
   blinksSupported: boolean;
   marketsApiSupported: boolean;
   positionsApiSupported: boolean;
+  directActionsAvailable: boolean;
 }> = {
   kamino: {
     name: 'kamino',
@@ -32,6 +193,7 @@ export const PROTOCOLS: Record<ProtocolId, {
     blinksSupported: true,
     marketsApiSupported: true,
     positionsApiSupported: true,
+    directActionsAvailable: true,
   },
   marginfi: {
     name: 'marginfi',
@@ -42,7 +204,8 @@ export const PROTOCOLS: Record<ProtocolId, {
     actions: ['deposit', 'withdraw', 'borrow', 'repay'],
     blinksSupported: true,
     marketsApiSupported: true,
-    positionsApiSupported: false, // Coming soon
+    positionsApiSupported: false,
+    directActionsAvailable: true,
   },
   jupiter: {
     name: 'jupiter',
@@ -54,6 +217,7 @@ export const PROTOCOLS: Record<ProtocolId, {
     blinksSupported: true,
     marketsApiSupported: true,
     positionsApiSupported: true,
+    directActionsAvailable: true,
   },
   raydium: {
     name: 'raydium',
@@ -61,10 +225,11 @@ export const PROTOCOLS: Record<ProtocolId, {
     category: 'amm',
     website: 'https://raydium.io',
     marketTypes: [],
-    actions: ['add-liquidity', 'remove-liquidity'],
+    actions: ['swap', 'add-liquidity', 'remove-liquidity'],
     blinksSupported: true,
-    marketsApiSupported: false, // Coming soon
+    marketsApiSupported: false,
     positionsApiSupported: false,
+    directActionsAvailable: true,
   },
   orca: {
     name: 'orca',
@@ -72,10 +237,11 @@ export const PROTOCOLS: Record<ProtocolId, {
     category: 'amm',
     website: 'https://orca.so',
     marketTypes: [],
-    actions: ['add-liquidity', 'remove-liquidity'],
+    actions: ['swap', 'add-liquidity', 'remove-liquidity'],
     blinksSupported: true,
-    marketsApiSupported: false, // Coming soon
+    marketsApiSupported: false,
     positionsApiSupported: false,
+    directActionsAvailable: true,
   },
   meteora: {
     name: 'meteora',
@@ -85,8 +251,9 @@ export const PROTOCOLS: Record<ProtocolId, {
     marketTypes: [],
     actions: ['add-liquidity', 'remove-liquidity'],
     blinksSupported: true,
-    marketsApiSupported: false, // Coming soon
+    marketsApiSupported: false,
     positionsApiSupported: false,
+    directActionsAvailable: true,
   },
   drift: {
     name: 'drift',
@@ -96,8 +263,9 @@ export const PROTOCOLS: Record<ProtocolId, {
     marketTypes: ['perpetual'],
     actions: ['vault-deposit', 'vault-withdraw'],
     blinksSupported: true,
-    marketsApiSupported: false, // Coming soon
+    marketsApiSupported: false,
     positionsApiSupported: false,
+    directActionsAvailable: true,
   },
   lulo: {
     name: 'lulo',
@@ -109,6 +277,7 @@ export const PROTOCOLS: Record<ProtocolId, {
     blinksSupported: true,
     marketsApiSupported: true,
     positionsApiSupported: true,
+    directActionsAvailable: true,
   },
   save: {
     name: 'save',
@@ -118,8 +287,9 @@ export const PROTOCOLS: Record<ProtocolId, {
     marketTypes: ['yield'],
     actions: ['deposit', 'withdraw'],
     blinksSupported: true,
-    marketsApiSupported: false, // Coming soon
+    marketsApiSupported: false,
     positionsApiSupported: false,
+    directActionsAvailable: false,
   },
   defituna: {
     name: 'defituna',
@@ -130,7 +300,8 @@ export const PROTOCOLS: Record<ProtocolId, {
     actions: ['deposit', 'withdraw'],
     blinksSupported: true,
     marketsApiSupported: true,
-    positionsApiSupported: false, // Coming soon
+    positionsApiSupported: false,
+    directActionsAvailable: true,
   },
   deficarrot: {
     name: 'deficarrot',
@@ -141,7 +312,8 @@ export const PROTOCOLS: Record<ProtocolId, {
     actions: ['deposit', 'withdraw'],
     blinksSupported: true,
     marketsApiSupported: true,
-    positionsApiSupported: false, // Coming soon
+    positionsApiSupported: false,
+    directActionsAvailable: true,
   },
   dflow: {
     name: 'dflow',
@@ -150,9 +322,10 @@ export const PROTOCOLS: Record<ProtocolId, {
     website: 'https://dflow.net',
     marketTypes: ['prediction'],
     actions: ['bet', 'claim'],
-    blinksSupported: false, // Coming soon
+    blinksSupported: false,
     marketsApiSupported: true,
     positionsApiSupported: true,
+    directActionsAvailable: false,
   },
 };
 
@@ -160,17 +333,17 @@ export const PROTOCOLS: Record<ProtocolId, {
  * Protocol handler base class
  */
 export class ProtocolHandler {
-  protected dialect: DialectClient;
+  protected actionsClient: ActionsClient;
   protected blinks: BlinksExecutor;
   protected protocolId: ProtocolId;
 
   constructor(
     protocolId: ProtocolId,
-    dialect: DialectClient,
+    actionsClient: ActionsClient,
     blinks: BlinksExecutor
   ) {
     this.protocolId = protocolId;
-    this.dialect = dialect;
+    this.actionsClient = actionsClient;
     this.blinks = blinks;
   }
 
@@ -182,32 +355,45 @@ export class ProtocolHandler {
   }
 
   /**
-   * Get all markets for this protocol
+   * Get direct action endpoints for this protocol
    */
-  async getMarkets(): Promise<Market[]> {
-    return this.dialect.getMarketsByProtocol(this.protocolId);
+  getActionEndpoints(): Record<string, string> | undefined {
+    const endpoints = PROTOCOL_ACTION_ENDPOINTS[this.protocolId];
+    return endpoints?.actions;
   }
 
   /**
-   * Get positions for this protocol
+   * Build an action URL with parameters
    */
-  async getPositions(walletAddress: string): Promise<Position[]> {
-    return this.dialect.getPositions(walletAddress, { provider: this.protocolId });
-  }
-
-  /**
-   * Find market by token symbol
-   */
-  async findMarketByToken(symbol: string): Promise<Market | undefined> {
-    const markets = await this.getMarkets();
-    const symbolLower = symbol.toLowerCase();
+  buildActionUrl(actionKey: string, params: Record<string, string>): string | undefined {
+    const endpoints = this.getActionEndpoints();
+    if (!endpoints || !endpoints[actionKey]) return undefined;
     
-    return markets.find((m) => {
-      if ('token' in m && m.token?.symbol?.toLowerCase() === symbolLower) {
-        return true;
-      }
-      return false;
-    });
+    let url = endpoints[actionKey];
+    
+    // Replace template parameters like {vault}, {market}, {reserve}
+    for (const [key, value] of Object.entries(params)) {
+      url = url.replace(`{${key}}`, value);
+    }
+    
+    return url;
+  }
+
+  /**
+   * Get transaction for an action
+   */
+  async getActionTransaction(
+    actionKey: string,
+    walletAddress: string,
+    templateParams: Record<string, string>,
+    queryParams?: Record<string, string | number>
+  ): Promise<{ transaction: string; message?: string }> {
+    const url = this.buildActionUrl(actionKey, templateParams);
+    if (!url) {
+      throw new Error(`Action '${actionKey}' not found for protocol '${this.protocolId}'`);
+    }
+    
+    return this.actionsClient.postAction(url, walletAddress, queryParams);
   }
 }
 
@@ -219,36 +405,54 @@ export class ProtocolHandler {
  * Kamino Handler - Lend, Borrow, Multiply, Leverage
  */
 export class KaminoHandler extends ProtocolHandler {
-  constructor(dialect: DialectClient, blinks: BlinksExecutor) {
-    super('kamino', dialect, blinks);
+  constructor(actionsClient: ActionsClient, blinks: BlinksExecutor) {
+    super('kamino', actionsClient, blinks);
   }
 
-  async getLendMarkets(): Promise<Market[]> {
-    return this.dialect.getKaminoLendMarkets();
+  async getDepositTransaction(vault: string, walletAddress: string, amount: string) {
+    return this.getActionTransaction(
+      'lend-deposit',
+      walletAddress,
+      { vault },
+      { amount }
+    );
   }
 
-  async getBorrowMarkets(): Promise<Market[]> {
-    return this.dialect.getKaminoBorrowMarkets();
+  async getWithdrawTransaction(vault: string, walletAddress: string, amount: string) {
+    return this.getActionTransaction(
+      'lend-withdraw',
+      walletAddress,
+      { vault },
+      { amount }
+    );
   }
 
-  async getMultiplyMarkets(): Promise<Market[]> {
-    return this.dialect.getKaminoLoopMarkets();
+  async getBorrowTransaction(
+    market: string,
+    reserve: string,
+    walletAddress: string,
+    amount: string
+  ) {
+    return this.getActionTransaction(
+      'lending-borrow',
+      walletAddress,
+      { market, reserve },
+      { amount }
+    );
   }
 
-  async getDepositBlink(vaultSlug: string): Promise<string> {
-    return `blink:https://kamino.dial.to/api/v0/lend/${vaultSlug}/deposit`;
-  }
-
-  async getWithdrawBlink(vaultSlug: string): Promise<string> {
-    return `blink:https://kamino.dial.to/api/v0/lend/${vaultSlug}/withdraw`;
-  }
-
-  async getLendingDepositBlink(marketAddress: string, reserveAddress: string): Promise<string> {
-    return `blink:https://kamino.dial.to/api/v0/lending/reserve/${marketAddress}/${reserveAddress}/deposit`;
-  }
-
-  async getLendingBorrowBlink(marketAddress: string, reserveAddress: string): Promise<string> {
-    return `blink:https://kamino.dial.to/api/v0/lending/reserve/${marketAddress}/${reserveAddress}/borrow`;
+  async getRepayTransaction(
+    market: string,
+    reserve: string,
+    walletAddress: string,
+    amount: string
+  ) {
+    return this.getActionTransaction(
+      'lending-repay',
+      walletAddress,
+      { market, reserve },
+      { amount }
+    );
   }
 }
 
@@ -256,29 +460,33 @@ export class KaminoHandler extends ProtocolHandler {
  * MarginFi Handler
  */
 export class MarginFiHandler extends ProtocolHandler {
-  constructor(dialect: DialectClient, blinks: BlinksExecutor) {
-    super('marginfi', dialect, blinks);
-  }
-
-  async getLendingMarkets(): Promise<Market[]> {
-    return this.dialect.getMarginFiMarkets();
+  constructor(actionsClient: ActionsClient, blinks: BlinksExecutor) {
+    super('marginfi', actionsClient, blinks);
   }
 }
 
 /**
- * Jupiter Handler - Earn + Lend Borrow
+ * Jupiter Handler - Swap + Earn
  */
 export class JupiterHandler extends ProtocolHandler {
-  constructor(dialect: DialectClient, blinks: BlinksExecutor) {
-    super('jupiter', dialect, blinks);
+  constructor(actionsClient: ActionsClient, blinks: BlinksExecutor) {
+    super('jupiter', actionsClient, blinks);
   }
 
-  async getEarnMarkets(): Promise<Market[]> {
-    return this.dialect.getMarkets({ provider: 'jupiter', type: 'yield' });
-  }
-
-  async getBorrowMarkets(): Promise<Market[]> {
-    return this.dialect.getMarkets({ provider: 'jupiter', type: 'lending' });
+  async getSwapTransaction(
+    walletAddress: string,
+    inputMint: string,
+    outputMint: string,
+    amount: string
+  ) {
+    const url = this.buildActionUrl('swap', {});
+    if (!url) throw new Error('Swap action not found');
+    
+    return this.actionsClient.postAction(url, walletAddress, {
+      inputMint,
+      outputMint,
+      amount,
+    });
   }
 }
 
@@ -286,52 +494,26 @@ export class JupiterHandler extends ProtocolHandler {
  * Lulo Handler - Protected + Boosted Deposits
  */
 export class LuloHandler extends ProtocolHandler {
-  constructor(dialect: DialectClient, blinks: BlinksExecutor) {
-    super('lulo', dialect, blinks);
+  constructor(actionsClient: ActionsClient, blinks: BlinksExecutor) {
+    super('lulo', actionsClient, blinks);
   }
 
-  async getProtectedMarkets(): Promise<Market[]> {
-    const markets = await this.dialect.getLuloMarkets();
-    // Protected markets don't have cooldown
-    return markets.filter((m) => {
-      const additionalData = m.additionalData as Record<string, unknown> | undefined;
-      return !additionalData?.withdrawCooldownHours;
-    });
+  async getDepositTransaction(walletAddress: string, token: string, amount: string) {
+    return this.getActionTransaction(
+      'deposit',
+      walletAddress,
+      {},
+      { token, amount }
+    );
   }
 
-  async getBoostedMarkets(): Promise<Market[]> {
-    const markets = await this.dialect.getLuloMarkets();
-    // Boosted markets have cooldown
-    return markets.filter((m) => {
-      const additionalData = m.additionalData as Record<string, unknown> | undefined;
-      return additionalData?.withdrawCooldownHours;
-    });
-  }
-}
-
-/**
- * DeFiTuna Handler
- */
-export class DeFiTunaHandler extends ProtocolHandler {
-  constructor(dialect: DialectClient, blinks: BlinksExecutor) {
-    super('defituna', dialect, blinks);
-  }
-
-  async getLendMarkets(): Promise<Market[]> {
-    return this.dialect.getDeFiTunaMarkets();
-  }
-}
-
-/**
- * DeFiCarrot Handler
- */
-export class DeFiCarrotHandler extends ProtocolHandler {
-  constructor(dialect: DialectClient, blinks: BlinksExecutor) {
-    super('deficarrot', dialect, blinks);
-  }
-
-  async getYieldMarkets(): Promise<Market[]> {
-    return this.dialect.getDeFiCarrotMarkets();
+  async getWithdrawTransaction(walletAddress: string, token: string, amount: string) {
+    return this.getActionTransaction(
+      'withdraw',
+      walletAddress,
+      {},
+      { token, amount }
+    );
   }
 }
 
@@ -339,25 +521,51 @@ export class DeFiCarrotHandler extends ProtocolHandler {
  * Drift Handler - Strategy Vaults
  */
 export class DriftHandler extends ProtocolHandler {
-  constructor(dialect: DialectClient, blinks: BlinksExecutor) {
-    super('drift', dialect, blinks);
-  }
-
-  async getVaults(): Promise<Market[]> {
-    return this.dialect.getDriftMarkets();
+  constructor(actionsClient: ActionsClient, blinks: BlinksExecutor) {
+    super('drift', actionsClient, blinks);
   }
 }
 
 /**
- * DFlow Handler - Prediction Markets
+ * Sanctum Handler - LST Staking
  */
-export class DFlowHandler extends ProtocolHandler {
-  constructor(dialect: DialectClient, blinks: BlinksExecutor) {
-    super('dflow', dialect, blinks);
+export class SanctumHandler extends ProtocolHandler {
+  constructor(actionsClient: ActionsClient, blinks: BlinksExecutor) {
+    super('lulo', actionsClient, blinks); // Using lulo as placeholder ProtocolId
   }
 
-  async getPredictionMarkets(): Promise<Market[]> {
-    return this.dialect.getDFlowMarkets();
+  async getStakeTransaction(
+    walletAddress: string,
+    inputMint: string,
+    outputMint: string,
+    amount: string
+  ) {
+    const endpoints = PROTOCOL_ACTION_ENDPOINTS['sanctum'];
+    if (!endpoints) throw new Error('Sanctum endpoints not found');
+    
+    return this.actionsClient.postAction(endpoints.actions.stake, walletAddress, {
+      inputMint,
+      outputMint,
+      amount,
+    });
+  }
+}
+
+/**
+ * Jito Handler - JitoSOL Staking
+ */
+export class JitoHandler extends ProtocolHandler {
+  constructor(actionsClient: ActionsClient, blinks: BlinksExecutor) {
+    super('lulo', actionsClient, blinks); // Using lulo as placeholder ProtocolId
+  }
+
+  async getStakeTransaction(walletAddress: string, amount: string) {
+    const endpoints = PROTOCOL_ACTION_ENDPOINTS['jito'];
+    if (!endpoints) throw new Error('Jito endpoints not found');
+    
+    return this.actionsClient.postAction(endpoints.actions.stake, walletAddress, {
+      amount,
+    });
   }
 }
 
@@ -365,24 +573,24 @@ export class DFlowHandler extends ProtocolHandler {
  * Create all protocol handlers
  */
 export function createProtocolHandlers(
-  dialect: DialectClient,
   connection: Connection
-): Record<ProtocolId, ProtocolHandler> {
+): Record<string, ProtocolHandler> {
+  const actionsClient = new ActionsClient();
   const blinks = new BlinksExecutor(connection);
   
   return {
-    kamino: new KaminoHandler(dialect, blinks),
-    marginfi: new MarginFiHandler(dialect, blinks),
-    jupiter: new JupiterHandler(dialect, blinks),
-    raydium: new ProtocolHandler('raydium', dialect, blinks),
-    orca: new ProtocolHandler('orca', dialect, blinks),
-    meteora: new ProtocolHandler('meteora', dialect, blinks),
-    drift: new DriftHandler(dialect, blinks),
-    lulo: new LuloHandler(dialect, blinks),
-    save: new ProtocolHandler('save', dialect, blinks),
-    defituna: new DeFiTunaHandler(dialect, blinks),
-    deficarrot: new DeFiCarrotHandler(dialect, blinks),
-    dflow: new DFlowHandler(dialect, blinks),
+    kamino: new KaminoHandler(actionsClient, blinks),
+    marginfi: new MarginFiHandler(actionsClient, blinks),
+    jupiter: new JupiterHandler(actionsClient, blinks),
+    raydium: new ProtocolHandler('raydium', actionsClient, blinks),
+    orca: new ProtocolHandler('orca', actionsClient, blinks),
+    meteora: new ProtocolHandler('meteora', actionsClient, blinks),
+    drift: new DriftHandler(actionsClient, blinks),
+    lulo: new LuloHandler(actionsClient, blinks),
+    save: new ProtocolHandler('save', actionsClient, blinks),
+    defituna: new ProtocolHandler('defituna', actionsClient, blinks),
+    deficarrot: new ProtocolHandler('deficarrot', actionsClient, blinks),
+    dflow: new ProtocolHandler('dflow', actionsClient, blinks),
   };
 }
 

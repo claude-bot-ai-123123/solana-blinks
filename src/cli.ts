@@ -1,21 +1,11 @@
 #!/usr/bin/env node
 /**
  * Solana Blinks CLI
- * AI-agent ready CLI for Dialect Standard Blinks Library (SBL)
+ * AI-agent ready CLI for Solana Actions
  * 
- * Full coverage of 20 protocols:
- * - Kamino: Lend, Borrow, Multiply, Leverage, LP, Farms
- * - MarginFi: Lending
- * - Jupiter: Lend Earn, Lend Borrow, SWAP
- * - Raydium: AMM, CLMM
- * - Orca: Whirlpools
- * - Meteora: DLMM
- * - Drift: Strategy Vaults
- * - Lulo: Protected, Boosted Deposits
- * - Save: Protected Deposits
- * - DeFiTuna: Lend
- * - DeFiCarrot: Yield
- * - DFlow: Prediction Markets
+ * Uses direct protocol action endpoints per the Solana Actions specification:
+ * - GET to action URL → metadata + available actions
+ * - POST with account → transaction to sign
  */
 
 import { Command } from 'commander';
@@ -23,11 +13,11 @@ import { config } from 'dotenv';
 
 config();
 
-import { DialectClient } from './lib/dialect.js';
+import { ActionsClient, PROTOCOL_ACTIONS, TRUSTED_HOSTS } from './lib/actions.js';
 import { BlinksExecutor } from './lib/blinks.js';
 import { Wallet, getWalletBalance, getWalletTokenBalances } from './lib/wallet.js';
 import { getConnection, checkConnection } from './lib/connection.js';
-import { PROTOCOLS, createProtocolHandlers } from './lib/protocols.js';
+import { PROTOCOLS, PROTOCOL_ACTION_ENDPOINTS, createProtocolHandlers } from './lib/protocols.js';
 import {
   formatOutput,
   formatPercent,
@@ -36,7 +26,7 @@ import {
   error,
   info,
 } from './lib/output.js';
-import type { OutputFormat, MarketType, ProtocolId, Market } from './types/index.js';
+import type { OutputFormat, MarketType, ProtocolId } from './types/index.js';
 
 const program = new Command();
 
@@ -46,8 +36,8 @@ const program = new Command();
 
 program
   .name('blinks')
-  .description('Solana Blinks CLI - Full Dialect SBL Coverage')
-  .version('1.0.0')
+  .description('Solana Blinks CLI - Direct Solana Actions Integration')
+  .version('2.0.0')
   .option('-f, --format <format>', 'Output format: json, table, minimal', 'json')
   .option('-r, --rpc <url>', 'Solana RPC URL')
   .option('-q, --quiet', 'Minimal output')
@@ -106,165 +96,37 @@ walletCmd
   });
 
 // ============================================
-// Markets Commands
-// ============================================
-
-const marketsCmd = program.command('markets').description('Browse DeFi markets');
-
-marketsCmd
-  .command('list')
-  .description('List markets by type')
-  .option('-t, --type <type>', 'Market type: lending, yield, loop, perp, prediction')
-  .option('-p, --provider <provider>', 'Filter by protocol (kamino, marginfi, jupiter, etc.)')
-  .option('--token <symbol>', 'Filter by token symbol')
-  .option('--min-apy <apy>', 'Minimum APY (decimal, e.g. 0.05 for 5%)')
-  .option('--min-tvl <tvl>', 'Minimum TVL in USD')
-  .option('-l, --limit <n>', 'Limit results', '20')
-  .action(async (opts) => {
-    try {
-      const dialect = new DialectClient();
-      
-      let markets = await dialect.getMarkets({
-        type: opts.type as MarketType | undefined,
-        provider: opts.provider as ProtocolId | undefined,
-        token: opts.token,
-        minApy: opts.minApy ? parseFloat(opts.minApy) : undefined,
-        minTvl: opts.minTvl ? parseFloat(opts.minTvl) : undefined,
-      });
-
-      markets = markets.slice(0, parseInt(opts.limit));
-
-      // Format for output
-      const formatted = markets.map((m) => ({
-        id: m.id,
-        type: m.type,
-        provider: m.provider.name,
-        token: 'token' in m ? m.token?.symbol : 
-               'tokenA' in m ? `${m.tokenA?.symbol}/${m.tokenB?.symbol}` : '-',
-        apy: 'depositApy' in m ? formatPercent(m.depositApy) : '-',
-        tvl: 'totalDepositUsd' in m ? formatUsd((m as any).totalDepositUsd) : '-',
-        actions: Object.keys(m.actions).join(', '),
-      }));
-
-      console.log(formatOutput(formatted, getFormat()));
-    } catch (e) {
-      error((e as Error).message);
-      process.exit(1);
-    }
-  });
-
-marketsCmd
-  .command('best-yield')
-  .description('Show best yield opportunities')
-  .option('-l, --limit <n>', 'Limit results', '10')
-  .action(async (opts) => {
-    try {
-      const dialect = new DialectClient();
-      const markets = await dialect.getBestYieldMarkets(parseInt(opts.limit));
-      
-      const formatted = markets.map((m) => ({
-        provider: m.provider.name,
-        token: 'token' in m ? m.token?.symbol : '-',
-        apy: 'depositApy' in m ? formatPercent(m.depositApy) : '-',
-        tvl: 'totalDepositUsd' in m ? formatUsd((m as any).totalDepositUsd) : '-',
-        blinkUrl: m.actions.deposit?.blinkUrl || '-',
-      }));
-
-      console.log(formatOutput(formatted, getFormat()));
-    } catch (e) {
-      error((e as Error).message);
-      process.exit(1);
-    }
-  });
-
-marketsCmd
-  .command('best-borrow')
-  .description('Show lowest borrow rates')
-  .option('-l, --limit <n>', 'Limit results', '10')
-  .action(async (opts) => {
-    try {
-      const dialect = new DialectClient();
-      const markets = await dialect.getBestBorrowRates(parseInt(opts.limit));
-      
-      const formatted = markets.map((m) => ({
-        provider: m.provider.name,
-        token: 'token' in m ? m.token?.symbol : '-',
-        borrowApy: 'borrowApy' in m ? formatPercent((m as any).borrowApy) : '-',
-        maxLtv: 'maxLtv' in m ? formatPercent((m as any).maxLtv) : '-',
-        blinkUrl: m.actions.borrow?.blinkUrl || '-',
-      }));
-
-      console.log(formatOutput(formatted, getFormat()));
-    } catch (e) {
-      error((e as Error).message);
-      process.exit(1);
-    }
-  });
-
-marketsCmd
-  .command('search <token>')
-  .description('Search markets by token symbol')
-  .action(async (token) => {
-    try {
-      const dialect = new DialectClient();
-      const markets = await dialect.searchMarketsByToken(token);
-      
-      const formatted = markets.map((m) => ({
-        id: m.id,
-        type: m.type,
-        provider: m.provider.name,
-        token: 'token' in m ? m.token?.symbol : 
-               'tokenA' in m ? `${m.tokenA?.symbol}/${m.tokenB?.symbol}` : '-',
-        apy: 'depositApy' in m ? formatPercent(m.depositApy) : '-',
-      }));
-
-      console.log(formatOutput(formatted, getFormat()));
-    } catch (e) {
-      error((e as Error).message);
-      process.exit(1);
-    }
-  });
-
-// ============================================
-// Positions Command
+// Protocols Command
 // ============================================
 
 program
-  .command('positions')
-  .description('View wallet positions across protocols')
-  .option('-w, --wallet <address>', 'Wallet address')
-  .option('-p, --provider <provider>', 'Filter by protocol')
-  .option('-t, --type <type>', 'Filter by market type')
-  .action(async (opts) => {
-    try {
-      const dialect = new DialectClient();
-      let walletAddress = opts.wallet;
-      
-      if (!walletAddress) {
-        const wallet = Wallet.fromEnv();
-        walletAddress = wallet.address;
-      }
+  .command('protocols')
+  .description('List all supported protocols and their action endpoints')
+  .action(() => {
+    const formatted = Object.entries(PROTOCOLS).map(([id, p]) => {
+      const endpoints = PROTOCOL_ACTION_ENDPOINTS[id];
+      return {
+        name: p.name,
+        displayName: p.displayName,
+        category: p.category,
+        actions: p.actions.join(', '),
+        directActions: p.directActionsAvailable ? '✓' : '-',
+        blinks: p.blinksSupported ? '✓' : '-',
+        endpoints: endpoints ? Object.keys(endpoints.actions).join(', ') : '-',
+      };
+    });
+    console.log(formatOutput(formatted, getFormat()));
+  });
 
-      const positions = await dialect.getPositions(walletAddress, {
-        provider: opts.provider as ProtocolId | undefined,
-        type: opts.type as MarketType | undefined,
-      });
+// ============================================
+// Trusted Hosts Command
+// ============================================
 
-      const formatted = positions.map((p) => ({
-        marketId: p.marketId,
-        type: p.type,
-        side: p.side,
-        amount: p.amount,
-        amountUsd: formatUsd(p.amountUsd),
-        ltv: p.ltv ? formatPercent(p.ltv) : '-',
-        actions: Object.keys(p.actions).join(', '),
-      }));
-
-      console.log(formatOutput(formatted, getFormat()));
-    } catch (e) {
-      error((e as Error).message);
-      process.exit(1);
-    }
+program
+  .command('trusted-hosts')
+  .description('List all trusted action hosts from the registry')
+  .action(() => {
+    console.log(formatOutput({ trustedHosts: TRUSTED_HOSTS }, getFormat()));
   });
 
 // ============================================
@@ -273,7 +135,7 @@ program
 
 program
   .command('inspect <url>')
-  .description('Inspect a blink URL')
+  .description('Inspect a blink/action URL - fetch metadata and available actions')
   .action(async (url) => {
     try {
       const connection = getConnection();
@@ -305,8 +167,14 @@ program
         Object.assign(params, JSON.parse(opts.params));
       }
 
+      // Check if trusted
+      const trusted = blinks.isTrustedHost(url);
+      if (!trusted) {
+        info(`Warning: This URL is not from a verified trusted host`);
+      }
+
       // Get transaction
-      info(`Fetching transaction from blink...`);
+      info(`Fetching transaction from action endpoint...`);
       const blinkTx = await blinks.getTransaction(url, wallet.address, params);
 
       if (opts.dryRun) {
@@ -317,6 +185,7 @@ program
           unitsConsumed: simResult.unitsConsumed,
           error: simResult.error,
           message: blinkTx.message,
+          trusted,
         }, getFormat()));
       } else {
         // Execute
@@ -327,6 +196,7 @@ program
           signature,
           explorer: `https://solscan.io/tx/${signature}`,
           message: blinkTx.message,
+          trusted,
         }, getFormat()));
       }
     } catch (e) {
@@ -336,66 +206,10 @@ program
   });
 
 // ============================================
-// Protocol Commands
-// ============================================
-
-program
-  .command('protocols')
-  .description('List all supported protocols')
-  .action(() => {
-    const formatted = Object.values(PROTOCOLS).map((p) => ({
-      name: p.name,
-      displayName: p.displayName,
-      category: p.category,
-      marketTypes: p.marketTypes.join(', ') || '-',
-      actions: p.actions.join(', '),
-      marketsApi: p.marketsApiSupported ? '✓' : 'soon',
-      positionsApi: p.positionsApiSupported ? '✓' : 'soon',
-      blinks: p.blinksSupported ? '✓' : 'soon',
-    }));
-    console.log(formatOutput(formatted, getFormat()));
-  });
-
-// ============================================
 // Kamino Commands
 // ============================================
 
 const kaminoCmd = program.command('kamino').description('Kamino Finance operations');
-
-kaminoCmd
-  .command('markets')
-  .description('List Kamino markets')
-  .option('-t, --type <type>', 'Type: lend, borrow, multiply')
-  .action(async (opts) => {
-    try {
-      const dialect = new DialectClient();
-      let markets: Market[];
-      
-      if (opts.type === 'lend') {
-        markets = await dialect.getKaminoLendMarkets();
-      } else if (opts.type === 'borrow') {
-        markets = await dialect.getKaminoBorrowMarkets();
-      } else if (opts.type === 'multiply') {
-        markets = await dialect.getKaminoLoopMarkets();
-      } else {
-        markets = await dialect.getMarketsByProtocol('kamino');
-      }
-
-      const formatted = markets.map((m) => ({
-        id: m.id,
-        type: m.type,
-        token: 'token' in m ? m.token?.symbol : 
-               'tokenA' in m ? `${m.tokenA?.symbol}/${m.tokenB?.symbol}` : '-',
-        apy: 'depositApy' in m ? formatPercent(m.depositApy) : '-',
-        tvl: 'totalDepositUsd' in m ? formatUsd((m as any).totalDepositUsd) : '-',
-      }));
-
-      console.log(formatOutput(formatted, getFormat()));
-    } catch (e) {
-      error((e as Error).message);
-      process.exit(1);
-    }
-  });
 
 kaminoCmd
   .command('deposit')
@@ -409,7 +223,7 @@ kaminoCmd
       const connection = getConnection();
       const blinks = new BlinksExecutor(connection);
 
-      const blinkUrl = `blink:https://kamino.dial.to/api/v0/lend/${opts.vault}/deposit`;
+      const blinkUrl = `https://kamino.dial.to/api/v0/lend/${opts.vault}/deposit`;
       
       info(`Depositing ${opts.amount} to ${opts.vault}...`);
       const blinkTx = await blinks.getTransaction(blinkUrl, wallet.address, {
@@ -445,7 +259,7 @@ kaminoCmd
       const connection = getConnection();
       const blinks = new BlinksExecutor(connection);
 
-      const blinkUrl = `blink:https://kamino.dial.to/api/v0/lend/${opts.vault}/withdraw`;
+      const blinkUrl = `https://kamino.dial.to/api/v0/lend/${opts.vault}/withdraw`;
       
       info(`Withdrawing ${opts.amount} from ${opts.vault}...`);
       const blinkTx = await blinks.getTransaction(blinkUrl, wallet.address, {
@@ -482,7 +296,7 @@ kaminoCmd
       const connection = getConnection();
       const blinks = new BlinksExecutor(connection);
 
-      const blinkUrl = `blink:https://kamino.dial.to/api/v0/lending/reserve/${opts.market}/${opts.reserve}/borrow`;
+      const blinkUrl = `https://kamino.dial.to/api/v0/lending/reserve/${opts.market}/${opts.reserve}/borrow`;
       
       info(`Borrowing ${opts.amount}...`);
       const blinkTx = await blinks.getTransaction(blinkUrl, wallet.address, {
@@ -519,7 +333,7 @@ kaminoCmd
       const connection = getConnection();
       const blinks = new BlinksExecutor(connection);
 
-      const blinkUrl = `blink:https://kamino.dial.to/api/v0/lending/reserve/${opts.market}/${opts.reserve}/repay`;
+      const blinkUrl = `https://kamino.dial.to/api/v0/lending/reserve/${opts.market}/${opts.reserve}/repay`;
       
       info(`Repaying ${opts.amount}...`);
       const blinkTx = await blinks.getTransaction(blinkUrl, wallet.address, {
@@ -558,7 +372,7 @@ kaminoCmd
       const connection = getConnection();
       const blinks = new BlinksExecutor(connection);
 
-      const blinkUrl = `blink:https://kamino.dial.to/api/v0/multiply/${opts.market}/deposit?collTokenMint=${opts.collToken}&debtTokenMint=${opts.debtToken}`;
+      const blinkUrl = `https://kamino.dial.to/api/v0/multiply/${opts.market}/deposit?collTokenMint=${opts.collToken}&debtTokenMint=${opts.debtToken}`;
       
       const params: Record<string, string | number> = { amount: opts.amount };
       if (opts.leverage) params.leverage = opts.leverage;
@@ -584,38 +398,62 @@ kaminoCmd
   });
 
 // ============================================
-// MarginFi Commands
+// Jupiter Commands
 // ============================================
 
-const marginfiCmd = program.command('marginfi').description('MarginFi operations');
+const jupiterCmd = program.command('jupiter').description('Jupiter operations');
 
-marginfiCmd
-  .command('markets')
-  .description('List MarginFi lending markets')
-  .action(async () => {
+jupiterCmd
+  .command('swap')
+  .description('Swap tokens via Jupiter')
+  .requiredOption('--input <mint>', 'Input token mint')
+  .requiredOption('--output <mint>', 'Output token mint')
+  .requiredOption('--amount <amount>', 'Amount to swap')
+  .option('--slippage <bps>', 'Slippage in basis points', '50')
+  .option('--dry-run', 'Simulate')
+  .action(async (opts) => {
     try {
-      const dialect = new DialectClient();
-      const markets = await dialect.getMarginFiMarkets();
+      const wallet = Wallet.fromEnv();
+      const connection = getConnection();
+      const blinks = new BlinksExecutor(connection);
 
-      const formatted = markets.map((m) => ({
-        id: m.id,
-        token: 'token' in m ? m.token?.symbol : '-',
-        depositApy: 'depositApy' in m ? formatPercent(m.depositApy) : '-',
-        borrowApy: 'borrowApy' in m ? formatPercent((m as any).borrowApy) : '-',
-        maxLtv: 'maxLtv' in m ? formatPercent((m as any).maxLtv) : '-',
-      }));
+      const blinkUrl = `https://jupiter.dial.to/api/v0/swap`;
+      
+      info(`Swapping ${opts.amount} ${opts.input} for ${opts.output}...`);
+      const blinkTx = await blinks.getTransaction(blinkUrl, wallet.address, {
+        inputMint: opts.input,
+        outputMint: opts.output,
+        amount: opts.amount,
+        slippageBps: opts.slippage,
+      });
 
-      console.log(formatOutput(formatted, getFormat()));
+      if (opts.dryRun) {
+        const simResult = await blinks.simulate(blinkTx);
+        console.log(formatOutput(simResult, getFormat()));
+      } else {
+        const signature = await blinks.signAndSend(blinkTx, wallet.getSigner());
+        success(`Swap confirmed!`);
+        console.log(formatOutput({
+          signature,
+          explorer: `https://solscan.io/tx/${signature}`,
+        }, getFormat()));
+      }
     } catch (e) {
       error((e as Error).message);
       process.exit(1);
     }
   });
 
-marginfiCmd
+// ============================================
+// Lulo Commands
+// ============================================
+
+const luloCmd = program.command('lulo').description('Lulo yield operations');
+
+luloCmd
   .command('deposit')
-  .description('Deposit to MarginFi')
-  .requiredOption('--market <id>', 'Market ID')
+  .description('Deposit to Lulo')
+  .requiredOption('--token <mint>', 'Token mint address')
   .requiredOption('--amount <amount>', 'Amount')
   .option('--dry-run', 'Simulate')
   .action(async (opts) => {
@@ -623,18 +461,14 @@ marginfiCmd
       const wallet = Wallet.fromEnv();
       const connection = getConnection();
       const blinks = new BlinksExecutor(connection);
-      const dialect = new DialectClient();
 
-      const market = await dialect.getMarket(opts.market);
-      if (!market?.actions.deposit?.blinkUrl) {
-        throw new Error('Market not found or deposit not supported');
-      }
-
-      const blinkTx = await blinks.getTransaction(
-        market.actions.deposit.blinkUrl,
-        wallet.address,
-        { amount: opts.amount }
-      );
+      const blinkUrl = `https://lulo.dial.to/api/v0/deposit`;
+      
+      info(`Depositing ${opts.amount} to Lulo...`);
+      const blinkTx = await blinks.getTransaction(blinkUrl, wallet.address, {
+        token: opts.token,
+        amount: opts.amount,
+      });
 
       if (opts.dryRun) {
         const simResult = await blinks.simulate(blinkTx);
@@ -650,83 +484,10 @@ marginfiCmd
     }
   });
 
-// ============================================
-// Jupiter Lend Commands
-// ============================================
-
-const jupiterLendCmd = program.command('jupiter-lend').description('Jupiter lending operations');
-
-jupiterLendCmd
-  .command('markets')
-  .description('List Jupiter lending markets')
-  .option('-t, --type <type>', 'Type: earn or borrow')
-  .action(async (opts) => {
-    try {
-      const dialect = new DialectClient();
-      const markets = await dialect.getJupiterMarkets();
-
-      const filtered = opts.type
-        ? markets.filter((m) => 
-            opts.type === 'earn' ? m.type === 'yield' : m.type === 'lending'
-          )
-        : markets;
-
-      const formatted = filtered.map((m) => ({
-        id: m.id,
-        type: m.type,
-        token: 'token' in m ? m.token?.symbol : '-',
-        apy: 'depositApy' in m ? formatPercent(m.depositApy) : '-',
-      }));
-
-      console.log(formatOutput(formatted, getFormat()));
-    } catch (e) {
-      error((e as Error).message);
-      process.exit(1);
-    }
-  });
-
-// ============================================
-// Lulo Commands
-// ============================================
-
-const luloCmd = program.command('lulo').description('Lulo yield operations');
-
 luloCmd
-  .command('markets')
-  .description('List Lulo markets')
-  .option('-t, --type <type>', 'Type: protected or boosted')
-  .action(async (opts) => {
-    try {
-      const dialect = new DialectClient();
-      const markets = await dialect.getLuloMarkets();
-
-      const formatted = markets.map((m) => {
-        const additionalData = m.additionalData as Record<string, unknown> | undefined;
-        const isBoosted = !!additionalData?.withdrawCooldownHours;
-        return {
-          id: m.id,
-          token: 'token' in m ? m.token?.symbol : '-',
-          apy: 'depositApy' in m ? formatPercent(m.depositApy) : '-',
-          type: isBoosted ? 'boosted' : 'protected',
-          cooldown: additionalData?.withdrawCooldownHours || '-',
-        };
-      });
-
-      const filtered = opts.type
-        ? formatted.filter((m) => m.type === opts.type)
-        : formatted;
-
-      console.log(formatOutput(filtered, getFormat()));
-    } catch (e) {
-      error((e as Error).message);
-      process.exit(1);
-    }
-  });
-
-luloCmd
-  .command('deposit')
-  .description('Deposit to Lulo')
-  .requiredOption('--market <id>', 'Market ID')
+  .command('withdraw')
+  .description('Withdraw from Lulo')
+  .requiredOption('--token <mint>', 'Token mint address')
   .requiredOption('--amount <amount>', 'Amount')
   .option('--dry-run', 'Simulate')
   .action(async (opts) => {
@@ -734,25 +495,21 @@ luloCmd
       const wallet = Wallet.fromEnv();
       const connection = getConnection();
       const blinks = new BlinksExecutor(connection);
-      const dialect = new DialectClient();
 
-      const market = await dialect.getMarket(opts.market);
-      if (!market?.actions.deposit?.blinkUrl) {
-        throw new Error('Market not found or deposit not supported');
-      }
-
-      const blinkTx = await blinks.getTransaction(
-        market.actions.deposit.blinkUrl,
-        wallet.address,
-        { amount: opts.amount }
-      );
+      const blinkUrl = `https://lulo.dial.to/api/v0/withdraw`;
+      
+      info(`Withdrawing ${opts.amount} from Lulo...`);
+      const blinkTx = await blinks.getTransaction(blinkUrl, wallet.address, {
+        token: opts.token,
+        amount: opts.amount,
+      });
 
       if (opts.dryRun) {
         const simResult = await blinks.simulate(blinkTx);
         console.log(formatOutput(simResult, getFormat()));
       } else {
         const signature = await blinks.signAndSend(blinkTx, wallet.getSigner());
-        success(`Deposit confirmed!`);
+        success(`Withdrawal confirmed!`);
         console.log(formatOutput({ signature }, getFormat()));
       }
     } catch (e) {
@@ -768,30 +525,9 @@ luloCmd
 const driftCmd = program.command('drift').description('Drift strategy vault operations');
 
 driftCmd
-  .command('vaults')
-  .description('List Drift strategy vaults')
-  .action(async () => {
-    try {
-      const dialect = new DialectClient();
-      const markets = await dialect.getDriftMarkets();
-
-      const formatted = markets.map((m) => ({
-        id: m.id,
-        token: 'token' in m ? m.token?.symbol : '-',
-        apy: 'depositApy' in m ? formatPercent(m.depositApy) : '-',
-      }));
-
-      console.log(formatOutput(formatted, getFormat()));
-    } catch (e) {
-      error((e as Error).message);
-      process.exit(1);
-    }
-  });
-
-driftCmd
   .command('vault-deposit')
   .description('Deposit to Drift vault')
-  .requiredOption('--vault <id>', 'Vault ID')
+  .requiredOption('--vault <address>', 'Vault address')
   .requiredOption('--amount <amount>', 'Amount')
   .option('--dry-run', 'Simulate')
   .action(async (opts) => {
@@ -799,18 +535,13 @@ driftCmd
       const wallet = Wallet.fromEnv();
       const connection = getConnection();
       const blinks = new BlinksExecutor(connection);
-      const dialect = new DialectClient();
 
-      const market = await dialect.getMarket(opts.vault);
-      if (!market?.actions.deposit?.blinkUrl) {
-        throw new Error('Vault not found or deposit not supported');
-      }
-
-      const blinkTx = await blinks.getTransaction(
-        market.actions.deposit.blinkUrl,
-        wallet.address,
-        { amount: opts.amount }
-      );
+      const blinkUrl = `https://app.drift.trade/api/actions/vault/deposit?vault=${opts.vault}`;
+      
+      info(`Depositing ${opts.amount} to Drift vault...`);
+      const blinkTx = await blinks.getTransaction(blinkUrl, wallet.address, {
+        amount: opts.amount,
+      });
 
       if (opts.dryRun) {
         const simResult = await blinks.simulate(blinkTx);
@@ -826,38 +557,159 @@ driftCmd
     }
   });
 
+driftCmd
+  .command('vault-withdraw')
+  .description('Withdraw from Drift vault')
+  .requiredOption('--vault <address>', 'Vault address')
+  .requiredOption('--amount <amount>', 'Amount')
+  .option('--dry-run', 'Simulate')
+  .action(async (opts) => {
+    try {
+      const wallet = Wallet.fromEnv();
+      const connection = getConnection();
+      const blinks = new BlinksExecutor(connection);
+
+      const blinkUrl = `https://app.drift.trade/api/actions/vault/withdraw?vault=${opts.vault}`;
+      
+      info(`Withdrawing ${opts.amount} from Drift vault...`);
+      const blinkTx = await blinks.getTransaction(blinkUrl, wallet.address, {
+        amount: opts.amount,
+      });
+
+      if (opts.dryRun) {
+        const simResult = await blinks.simulate(blinkTx);
+        console.log(formatOutput(simResult, getFormat()));
+      } else {
+        const signature = await blinks.signAndSend(blinkTx, wallet.getSigner());
+        success(`Vault withdrawal confirmed!`);
+        console.log(formatOutput({ signature }, getFormat()));
+      }
+    } catch (e) {
+      error((e as Error).message);
+      process.exit(1);
+    }
+  });
+
 // ============================================
-// AMM Commands (Raydium, Orca, Meteora)
+// Sanctum Commands (LST Staking)
+// ============================================
+
+const sanctumCmd = program.command('sanctum').description('Sanctum LST staking operations');
+
+sanctumCmd
+  .command('stake')
+  .description('Stake SOL for an LST via Sanctum')
+  .requiredOption('--lst <mint>', 'LST token mint (e.g., JitoSOL, mSOL)')
+  .requiredOption('--amount <amount>', 'Amount of SOL to stake')
+  .option('--dry-run', 'Simulate')
+  .action(async (opts) => {
+    try {
+      const wallet = Wallet.fromEnv();
+      const connection = getConnection();
+      const blinks = new BlinksExecutor(connection);
+
+      const SOL_MINT = 'So11111111111111111111111111111111111111112';
+      const blinkUrl = `https://sanctum.dial.to/api/v0/stake`;
+      
+      info(`Staking ${opts.amount} SOL for ${opts.lst}...`);
+      const blinkTx = await blinks.getTransaction(blinkUrl, wallet.address, {
+        inputMint: SOL_MINT,
+        outputMint: opts.lst,
+        amount: opts.amount,
+      });
+
+      if (opts.dryRun) {
+        const simResult = await blinks.simulate(blinkTx);
+        console.log(formatOutput(simResult, getFormat()));
+      } else {
+        const signature = await blinks.signAndSend(blinkTx, wallet.getSigner());
+        success(`Staking confirmed!`);
+        console.log(formatOutput({ signature }, getFormat()));
+      }
+    } catch (e) {
+      error((e as Error).message);
+      process.exit(1);
+    }
+  });
+
+// ============================================
+// Jito Commands
+// ============================================
+
+const jitoCmd = program.command('jito').description('Jito staking operations');
+
+jitoCmd
+  .command('stake')
+  .description('Stake SOL for JitoSOL')
+  .requiredOption('--amount <amount>', 'Amount of SOL to stake')
+  .option('--dry-run', 'Simulate')
+  .action(async (opts) => {
+    try {
+      const wallet = Wallet.fromEnv();
+      const connection = getConnection();
+      const blinks = new BlinksExecutor(connection);
+
+      const blinkUrl = `https://jito.dial.to/stake`;
+      
+      info(`Staking ${opts.amount} SOL for JitoSOL...`);
+      const blinkTx = await blinks.getTransaction(blinkUrl, wallet.address, {
+        amount: opts.amount,
+      });
+
+      if (opts.dryRun) {
+        const simResult = await blinks.simulate(blinkTx);
+        console.log(formatOutput(simResult, getFormat()));
+      } else {
+        const signature = await blinks.signAndSend(blinkTx, wallet.getSigner());
+        success(`Staking confirmed!`);
+        console.log(formatOutput({ signature }, getFormat()));
+      }
+    } catch (e) {
+      error((e as Error).message);
+      process.exit(1);
+    }
+  });
+
+// ============================================
+// Raydium Commands
 // ============================================
 
 const raydiumCmd = program.command('raydium').description('Raydium AMM operations');
 
 raydiumCmd
-  .command('pools')
-  .description('List Raydium pools (coming soon)')
-  .action(() => {
-    info('Raydium pool listing via Dialect API coming soon');
-    info('Use: blinks inspect <raydium-blink-url> to inspect specific pools');
-  });
+  .command('swap')
+  .description('Swap tokens via Raydium')
+  .requiredOption('--input <mint>', 'Input token mint')
+  .requiredOption('--output <mint>', 'Output token mint')
+  .requiredOption('--amount <amount>', 'Amount to swap')
+  .option('--dry-run', 'Simulate')
+  .action(async (opts) => {
+    try {
+      const wallet = Wallet.fromEnv();
+      const connection = getConnection();
+      const blinks = new BlinksExecutor(connection);
 
-const orcaCmd = program.command('orca').description('Orca Whirlpool operations');
+      const blinkUrl = `https://share.raydium.io/swap`;
+      
+      info(`Swapping via Raydium...`);
+      const blinkTx = await blinks.getTransaction(blinkUrl, wallet.address, {
+        inputMint: opts.input,
+        outputMint: opts.output,
+        amount: opts.amount,
+      });
 
-orcaCmd
-  .command('pools')
-  .description('List Orca Whirlpools (coming soon)')
-  .action(() => {
-    info('Orca pool listing via Dialect API coming soon');
-    info('Use: blinks inspect <orca-blink-url> to inspect specific pools');
-  });
-
-const meteoraCmd = program.command('meteora').description('Meteora DLMM operations');
-
-meteoraCmd
-  .command('pools')
-  .description('List Meteora DLMM pools (coming soon)')
-  .action(() => {
-    info('Meteora pool listing via Dialect API coming soon');
-    info('Use: blinks inspect <meteora-blink-url> to inspect specific pools');
+      if (opts.dryRun) {
+        const simResult = await blinks.simulate(blinkTx);
+        console.log(formatOutput(simResult, getFormat()));
+      } else {
+        const signature = await blinks.signAndSend(blinkTx, wallet.getSigner());
+        success(`Swap confirmed!`);
+        console.log(formatOutput({ signature }, getFormat()));
+      }
+    } catch (e) {
+      error((e as Error).message);
+      process.exit(1);
+    }
   });
 
 // ============================================
@@ -888,7 +740,11 @@ program
           version: health.version,
         },
         wallet,
-        dialectApi: 'https://api.dialect.to',
+        architecture: 'Direct Solana Actions (no Dialect API dependency)',
+        trustedHostsCount: TRUSTED_HOSTS.length,
+        protocolsWithDirectActions: Object.entries(PROTOCOLS)
+          .filter(([_, p]) => p.directActionsAvailable)
+          .map(([id]) => id),
       }, getFormat()));
     } catch (e) {
       error((e as Error).message);
