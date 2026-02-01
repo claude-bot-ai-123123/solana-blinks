@@ -39,7 +39,11 @@ blinks jupiter swap --input=SOL --output=USDC --amount=1
 ```bash
 # Required
 export SOLANA_RPC_URL="https://api.mainnet-beta.solana.com"
-export SOLANA_PRIVATE_KEY="your-base58-key"  # Or JSON array
+
+# Wallet (choose one):
+export SOLANA_WALLET_PATH="~/.config/solana/id.json"  # Recommended: path to keypair file
+# OR
+export SOLANA_PRIVATE_KEY="your-base58-key"           # Fallback: direct key (less secure)
 ```
 
 ---

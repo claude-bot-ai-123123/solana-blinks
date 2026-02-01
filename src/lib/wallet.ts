@@ -47,15 +47,27 @@ export class Wallet {
 
   /**
    * Load wallet from environment variable
+   * 
+   * Priority:
+   * 1. SOLANA_WALLET_PATH - path to JSON keypair file (recommended)
+   * 2. SOLANA_PRIVATE_KEY - base58 or JSON array (fallback)
    */
   static fromEnv(): Wallet {
-    const privateKey = process.env.SOLANA_PRIVATE_KEY;
-    
-    if (!privateKey) {
-      throw new Error('SOLANA_PRIVATE_KEY environment variable not set');
+    // Prefer file path (more secure - key not in env)
+    const walletPath = process.env.SOLANA_WALLET_PATH;
+    if (walletPath) {
+      return Wallet.fromFile(walletPath);
     }
 
-    return Wallet.fromPrivateKey(privateKey);
+    // Fallback to direct key (backwards compatibility)
+    const privateKey = process.env.SOLANA_PRIVATE_KEY;
+    if (privateKey) {
+      return Wallet.fromPrivateKey(privateKey);
+    }
+
+    throw new Error(
+      'No wallet configured. Set SOLANA_WALLET_PATH (recommended) or SOLANA_PRIVATE_KEY'
+    );
   }
 
   /**
