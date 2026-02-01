@@ -78,5 +78,28 @@ export {
 // Convenience re-exports
 export { Connection, PublicKey, Keypair } from '@solana/web3.js';
 
+// Registry - Fetch trusted hosts from Dialect registry
+export {
+  fetchRegistry,
+  getTrustedHosts,
+  getMaliciousHosts,
+  isHostTrusted,
+  isHostMalicious,
+  getProtocolHosts,
+  getRegistryStats,
+  clearRegistryCache,
+} from './lib/registry.js';
+
+// Markets API - Dialect Standard Blinks Library
+export {
+  MarketsClient,
+  createMarketsClient,
+  getMarkets,
+  getPositions,
+  findBestYield,
+  type DialectMarket,
+  type DialectPosition,
+} from './lib/markets.js';
+
 // Legacy export for backward compatibility (deprecated)
 export { ActionsClient as DialectClient } from './lib/actions.js';

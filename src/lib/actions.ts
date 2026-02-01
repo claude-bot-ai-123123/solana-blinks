@@ -275,7 +275,8 @@ export class ActionsClient {
           ...ACTIONS_HEADERS,
           'User-Agent': USER_AGENT,
         },
-        body: JSON.stringify({ account }),
+        // Include type: "transaction" as some endpoints (e.g., Kamino) require it
+        body: JSON.stringify({ account, type: 'transaction' }),
         signal: controller.signal,
       });
 
