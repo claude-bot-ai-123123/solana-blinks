@@ -15,156 +15,195 @@ import type { Connection } from '@solana/web3.js';
 /**
  * Known action endpoints for major DeFi protocols
  * These are direct URLs that implement the Solana Actions specification
+ * 
+ * Status: ✅ = Tested working, ⚠️ = Partial/untested, 🔒 = Cloudflare blocked, ❌ = Not working
  */
 export const PROTOCOL_ACTION_ENDPOINTS: Record<string, {
   displayName: string;
   category: string;
   website: string;
+  status: 'working' | 'partial' | 'blocked' | 'unknown' | 'broken';
   actions: Record<string, string>;
   trustedHosts: string[];
+  notes?: string;
 }> = {
+  // ✅ CONFIRMED WORKING
   kamino: {
     displayName: 'Kamino Finance',
     category: 'lending-yield',
     website: 'https://kamino.finance',
+    status: 'working',
     actions: {
-      // Kamino Lend (yield vaults)
+      // Kamino Lend (yield vaults) - CONFIRMED WORKING
       'lend-deposit': 'https://kamino.dial.to/api/v0/lend/{vault}/deposit',
       'lend-withdraw': 'https://kamino.dial.to/api/v0/lend/{vault}/withdraw',
-      // Kamino Lending (borrow)
+      // Kamino Lending (borrow) - untested
       'lending-deposit': 'https://kamino.dial.to/api/v0/lending/reserve/{market}/{reserve}/deposit',
       'lending-withdraw': 'https://kamino.dial.to/api/v0/lending/reserve/{market}/{reserve}/withdraw',
       'lending-borrow': 'https://kamino.dial.to/api/v0/lending/reserve/{market}/{reserve}/borrow',
       'lending-repay': 'https://kamino.dial.to/api/v0/lending/reserve/{market}/{reserve}/repay',
-      // Kamino Multiply (loop)
+      // Kamino Multiply (loop) - untested
       'multiply-deposit': 'https://kamino.dial.to/api/v0/multiply/{market}/deposit',
       'multiply-withdraw': 'https://kamino.dial.to/api/v0/multiply/{market}/withdraw',
     },
     trustedHosts: ['kamino.dial.to', 'app.kamino.finance'],
-  },
-  
-  marginfi: {
-    displayName: 'MarginFi',
-    category: 'lending',
-    website: 'https://marginfi.com',
-    actions: {
-      deposit: 'https://marginfi.dial.to/api/v0/deposit',
-      withdraw: 'https://marginfi.dial.to/api/v0/withdraw',
-      borrow: 'https://marginfi.dial.to/api/v0/borrow',
-      repay: 'https://marginfi.dial.to/api/v0/repay',
-    },
-    trustedHosts: ['marginfi.dial.to', 'app.marginfi.com'],
-  },
-  
-  jupiter: {
-    displayName: 'Jupiter',
-    category: 'swap-lending',
-    website: 'https://jup.ag',
-    actions: {
-      swap: 'https://jupiter.dial.to/api/v0/swap',
-      'lend-deposit': 'https://jupiter.dial.to/api/v0/perps/earn/deposit',
-      'lend-withdraw': 'https://jupiter.dial.to/api/v0/perps/earn/withdraw',
-    },
-    trustedHosts: ['jupiter.dial.to', 'jup.ag'],
-  },
-  
-  raydium: {
-    displayName: 'Raydium',
-    category: 'amm',
-    website: 'https://raydium.io',
-    actions: {
-      'swap': 'https://share.raydium.io/swap',
-      'add-liquidity': 'https://share.raydium.io/liquidity/add',
-      'remove-liquidity': 'https://share.raydium.io/liquidity/remove',
-    },
-    trustedHosts: ['share.raydium.io', 'raydium.dial.to'],
-  },
-  
-  orca: {
-    displayName: 'Orca',
-    category: 'amm',
-    website: 'https://orca.so',
-    actions: {
-      swap: 'https://orca.dial.to/api/v0/swap',
-      'add-liquidity': 'https://orca.dial.to/api/v0/liquidity/add',
-      'remove-liquidity': 'https://orca.dial.to/api/v0/liquidity/remove',
-    },
-    trustedHosts: ['orca.dial.to', 'orca.so'],
-  },
-  
-  meteora: {
-    displayName: 'Meteora',
-    category: 'amm',
-    website: 'https://meteora.ag',
-    actions: {
-      'add-liquidity': 'https://meteora.dial.to/api/v0/dlmm/add',
-      'remove-liquidity': 'https://meteora.dial.to/api/v0/dlmm/remove',
-    },
-    trustedHosts: ['meteora.dial.to', 'app.meteora.ag'],
-  },
-  
-  drift: {
-    displayName: 'Drift Protocol',
-    category: 'perps',
-    website: 'https://drift.trade',
-    actions: {
-      'vault-deposit': 'https://app.drift.trade/api/actions/vault/deposit',
-      'vault-withdraw': 'https://app.drift.trade/api/actions/vault/withdraw',
-    },
-    trustedHosts: ['app.drift.trade', 'drift.dial.to'],
-  },
-  
-  lulo: {
-    displayName: 'Lulo',
-    category: 'yield',
-    website: 'https://lulo.fi',
-    actions: {
-      deposit: 'https://blink.lulo.fi/api/actions/deposit',
-      withdraw: 'https://blink.lulo.fi/api/actions/withdraw',
-    },
-    trustedHosts: ['blink.lulo.fi', 'lulo.dial.to'],
-  },
-  
-  sanctum: {
-    displayName: 'Sanctum',
-    category: 'staking',
-    website: 'https://sanctum.so',
-    actions: {
-      stake: 'https://sanctum.dial.to/api/v0/stake',
-      unstake: 'https://sanctum.dial.to/api/v0/unstake',
-    },
-    trustedHosts: ['sanctum.dial.to', 'sanctum.so'],
-  },
-  
-  jito: {
-    displayName: 'Jito',
-    category: 'staking',
-    website: 'https://jito.network',
-    actions: {
-      stake: 'https://jito.dial.to/stake',
-    },
-    trustedHosts: ['jito.dial.to', 'jito.network'],
+    notes: 'Vaults: usdg-prime, usdc-main, sol-main, etc.',
   },
   
   tensor: {
     displayName: 'Tensor',
     category: 'nft',
     website: 'https://tensor.trade',
+    status: 'working',
     actions: {
-      buy: 'https://tensor.dial.to/api/v0/buy',
-      list: 'https://tensor.dial.to/api/v0/list',
+      'buy-floor': 'https://tensor.dial.to/buy-floor/{collection}',
+      'bid': 'https://tensor.dial.to/bid/{item}',
     },
     trustedHosts: ['tensor.dial.to', 'tensor.trade'],
+    notes: 'Routes via tensor.trade/actions.json. Needs collection/item params.',
+  },
+  
+  // 🔒 CLOUDFLARE BLOCKED (works in browser)
+  jito: {
+    displayName: 'Jito',
+    category: 'staking',
+    website: 'https://jito.network',
+    status: 'blocked',
+    actions: {
+      stake: 'https://jito.dial.to/stake',
+    },
+    trustedHosts: ['jito.dial.to', 'jito.network'],
+    notes: 'Cloudflare blocks server IPs. Works in browser.',
+  },
+  
+  sanctum: {
+    displayName: 'Sanctum',
+    category: 'staking',
+    website: 'https://sanctum.so',
+    status: 'blocked',
+    actions: {
+      stake: 'https://sanctum.dial.to/stake',
+      unstake: 'https://sanctum.dial.to/unstake',
+    },
+    trustedHosts: ['sanctum.dial.to', 'sanctum.so'],
+    notes: 'Cloudflare blocks server IPs. Works in browser.',
+  },
+  
+  // ⚠️ PARTIAL - has actions.json but endpoints need discovery
+  meteora: {
+    displayName: 'Meteora',
+    category: 'amm',
+    website: 'https://meteora.ag',
+    status: 'partial',
+    actions: {
+      // Paths based on actions.json, may need specific pool IDs
+      'dlmm-add': 'https://meteora.dial.to/api/dlmm/{pool}/add-liquidity',
+      'dlmm-remove': 'https://meteora.dial.to/api/dlmm/{pool}/remove-liquidity',
+      'bonding-curve': 'https://meteora.dial.to/api/bonding-curve/{action}',
+    },
+    trustedHosts: ['meteora.dial.to', 'app.meteora.ag'],
+    notes: 'Has actions.json. Endpoints likely need pool addresses.',
+  },
+  
+  drift: {
+    displayName: 'Drift Protocol',
+    category: 'perps',
+    website: 'https://drift.trade',
+    status: 'partial',
+    actions: {
+      deposit: 'https://app.drift.trade/api/blinks/deposit',
+      elections: 'https://app.drift.trade/api/blinks/elections',
+    },
+    trustedHosts: ['app.drift.trade', 'drift.dial.to'],
+    notes: 'Has actions.json. Deposit endpoint returns 500.',
+  },
+  
+  // ❌ UNKNOWN - endpoint paths not discovered
+  marginfi: {
+    displayName: 'MarginFi',
+    category: 'lending',
+    website: 'https://marginfi.com',
+    status: 'unknown',
+    actions: {
+      // Paths untested - all return 404
+      deposit: 'https://marginfi.dial.to/deposit',
+      withdraw: 'https://marginfi.dial.to/withdraw',
+    },
+    trustedHosts: ['marginfi.dial.to', 'app.marginfi.com'],
+    notes: 'Endpoint paths unknown. All tested paths return 404.',
+  },
+  
+  jupiter: {
+    displayName: 'Jupiter',
+    category: 'swap-lending',
+    website: 'https://jup.ag',
+    status: 'unknown',
+    actions: {
+      // Paths untested - all return 404
+      swap: 'https://jupiter.dial.to/swap',
+    },
+    trustedHosts: ['jupiter.dial.to', 'jup.ag'],
+    notes: 'Endpoint paths unknown. All tested paths return 404.',
+  },
+  
+  raydium: {
+    displayName: 'Raydium',
+    category: 'amm',
+    website: 'https://raydium.io',
+    status: 'unknown',
+    actions: {
+      swap: 'https://share.raydium.io/swap',
+    },
+    trustedHosts: ['share.raydium.io', 'raydium.dial.to'],
+    notes: 'No actions.json. Endpoint paths unknown.',
+  },
+  
+  orca: {
+    displayName: 'Orca',
+    category: 'amm',
+    website: 'https://orca.so',
+    status: 'unknown',
+    actions: {
+      swap: 'https://orca.dial.to/swap',
+    },
+    trustedHosts: ['orca.dial.to', 'orca.so'],
+    notes: 'Endpoint paths unknown. All tested paths return 404.',
+  },
+  
+  lulo: {
+    displayName: 'Lulo',
+    category: 'yield',
+    website: 'https://lulo.fi',
+    status: 'broken',
+    actions: {
+      deposit: 'https://lulo.dial.to/deposit',
+    },
+    trustedHosts: ['blink.lulo.fi', 'lulo.dial.to'],
+    notes: 'lulo.dial.to returns 404. blink.lulo.fi has SSL errors.',
+  },
+  
+  helius: {
+    displayName: 'Helius',
+    category: 'staking',
+    website: 'https://helius.dev',
+    status: 'blocked',
+    actions: {
+      stake: 'https://helius.dial.to/stake',
+    },
+    trustedHosts: ['helius.dial.to'],
+    notes: 'Returns 403 Forbidden.',
   },
   
   magiceden: {
     displayName: 'Magic Eden',
     category: 'nft',
     website: 'https://magiceden.io',
+    status: 'partial',
     actions: {
-      buy: 'https://api-mainnet.magiceden.dev/v2/actions/buy',
+      buy: 'https://api-mainnet.magiceden.dev/v2/actions/buy/{item}',
     },
     trustedHosts: ['api-mainnet.magiceden.dev', 'magiceden.dev'],
+    notes: 'Returns 400. Needs specific item parameters.',
   },
 };
 
