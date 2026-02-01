@@ -1,0 +1,16 @@
+--- a/src/cli.ts
++++ b/src/cli.ts
+@@ -1,7 +1,7 @@
+-      const blinkUrl = `https://worker.jup.ag/blinks/swap`;
++      const inputMint = TOKENS[opts.input.toUpperCase()] || opts.input;
++      const outputMint = TOKENS[opts.output.toUpperCase()] || opts.output;
++      const blinkUrl = `https://worker.jup.ag/blinks/swap/${inputMint}/${outputMint}/${opts.amount}`;
+       
+       info(`Swapping ${opts.amount} ${opts.input} for ${opts.output}...`);
+-      const blinkTx = await blinks.getTransaction(blinkUrl, wallet.address, {
+-        inputMint: opts.input,
+-        outputMint: opts.output,
+-        amount: opts.amount,
+-        slippageBps: opts.slippage,
+-      });
++      const blinkTx = await blinks.getTransaction(blinkUrl, wallet.address);

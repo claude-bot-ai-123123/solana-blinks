@@ -16,6 +16,7 @@ config();
 import { ActionsClient, PROTOCOL_ACTIONS, TRUSTED_HOSTS } from './lib/actions.js';
 import { BlinksExecutor } from './lib/blinks.js';
 import { Wallet, getWalletBalance, getWalletTokenBalances } from './lib/wallet.js';
+import { TOKENS } from './lib/endpoints.js';
 import { getConnection, checkConnection } from './lib/connection.js';
 import { PROTOCOLS, PROTOCOL_ACTION_ENDPOINTS, createProtocolHandlers } from './lib/protocols.js';
 import {
@@ -417,15 +418,13 @@ jupiterCmd
       const connection = getConnection();
       const blinks = new BlinksExecutor(connection);
 
-      const blinkUrl = `https://jupiter.dial.to/api/v0/swap`;
+      const inputMint = TOKENS[opts.input.toUpperCase()] || opts.input;
+      const outputMint = TOKENS[opts.output.toUpperCase()] || opts.output;
+      const blinkUrl = `https://worker.jup.ag/blinks/swap/${inputMint}/${outputMint}/${opts.amount}`;
       
       info(`Swapping ${opts.amount} ${opts.input} for ${opts.output}...`);
-      const blinkTx = await blinks.getTransaction(blinkUrl, wallet.address, {
-        inputMint: opts.input,
-        outputMint: opts.output,
-        amount: opts.amount,
-        slippageBps: opts.slippage,
-      });
+      info(`URL: ${blinkUrl}`);
+      const blinkTx = await blinks.getTransaction(blinkUrl, wallet.address);
 
       if (opts.dryRun) {
         const simResult = await blinks.simulate(blinkTx);
@@ -689,14 +688,12 @@ raydiumCmd
       const connection = getConnection();
       const blinks = new BlinksExecutor(connection);
 
-      const blinkUrl = `https://share.raydium.io/swap`;
+      const outputMint = TOKENS[opts.output.toUpperCase()] || opts.output;
+      const blinkUrl = `https://share.raydium.io/dialect/actions/swap/tx?outputMint=${outputMint}&amount=${opts.amount}`;
       
-      info(`Swapping via Raydium...`);
-      const blinkTx = await blinks.getTransaction(blinkUrl, wallet.address, {
-        inputMint: opts.input,
-        outputMint: opts.output,
-        amount: opts.amount,
-      });
+      info(`Swapping ${opts.amount} SOL for ${opts.output} via Raydium...`);
+      info(`URL: ${blinkUrl}`);
+      const blinkTx = await blinks.getTransaction(blinkUrl, wallet.address);
 
       if (opts.dryRun) {
         const simResult = await blinks.simulate(blinkTx);
