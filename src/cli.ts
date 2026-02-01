@@ -200,8 +200,17 @@ program
           trusted,
         }, getFormat()));
       }
-    } catch (e) {
-      error((e as Error).message);
+    } catch (e: unknown) {
+      const err = e as Error & { details?: string };
+      error(err.message);
+      if (err.details) {
+        try {
+          const parsed = JSON.parse(err.details);
+          if (parsed.message) error(`  → ${parsed.message}`);
+        } catch {
+          if (err.details !== err.message) error(`  → ${err.details}`);
+        }
+      }
       process.exit(1);
     }
   });
