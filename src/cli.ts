@@ -987,5 +987,146 @@ program
     }
   });
 
+// ============================================
+// Token & Market Discovery Commands
+// ============================================
+
+import {
+  COMMON_TOKENS,
+  resolveTokenMint,
+  searchToken,
+  getKaminoLendVaults,
+  buildJupiterSwapUrl,
+  buildRaydiumSwapUrl,
+  buildKaminoDepositUrl,
+  buildKaminoWithdrawUrl,
+  buildJitoStakeUrl,
+  buildMagicEdenBuyUrl,
+  buildTensorBuyFloorUrl,
+} from './lib/markets.js';
+
+const tokensCmd = program.command('tokens').description('Token discovery and lookup');
+
+tokensCmd
+  .command('list')
+  .description('List common token mint addresses')
+  .action(() => {
+    const tokens = Object.entries(COMMON_TOKENS).map(([symbol, mint]) => ({
+      symbol,
+      mint,
+    }));
+    console.log(formatOutput({ tokens, count: tokens.length }, getFormat()));
+  });
+
+tokensCmd
+  .command('resolve <symbolOrMint>')
+  .description('Resolve a token symbol to mint address')
+  .action((symbolOrMint: string) => {
+    const mint = resolveTokenMint(symbolOrMint);
+    const symbol = Object.entries(COMMON_TOKENS).find(([_, m]) => m === mint)?.[0];
+    console.log(formatOutput({ input: symbolOrMint, mint, symbol: symbol || 'Unknown' }, getFormat()));
+  });
+
+tokensCmd
+  .command('search <query>')
+  .description('Search for tokens by symbol or name (requires network)')
+  .action(async (query: string) => {
+    try {
+      info(`Searching for "${query}"...`);
+      const results = await searchToken(query);
+      console.log(formatOutput({ query, results, count: results.length }, getFormat()));
+    } catch (e) {
+      error((e as Error).message);
+      process.exit(1);
+    }
+  });
+
+const vaultsCmd = program.command('vaults').description('Vault discovery');
+
+vaultsCmd
+  .command('kamino')
+  .description('List Kamino lending vaults')
+  .action(() => {
+    const vaults = getKaminoLendVaults();
+    console.log(formatOutput({ vaults, count: vaults.length }, getFormat()));
+  });
+
+const buildCmd = program.command('build').description('Build action URLs for any token');
+
+buildCmd
+  .command('swap')
+  .description('Build a swap URL (Jupiter or Raydium)')
+  .requiredOption('--from <token>', 'Input token (symbol or mint)')
+  .requiredOption('--to <token>', 'Output token (symbol or mint)')
+  .option('--amount <amount>', 'Amount to swap')
+  .option('--protocol <protocol>', 'Protocol: jupiter (default) or raydium', 'jupiter')
+  .action((opts) => {
+    let url: string;
+    
+    if (opts.protocol === 'raydium') {
+      if (!opts.amount) {
+        error('Raydium requires --amount');
+        process.exit(1);
+      }
+      url = buildRaydiumSwapUrl(opts.from, opts.to, parseFloat(opts.amount));
+    } else {
+      url = buildJupiterSwapUrl(opts.from, opts.to, opts.amount ? parseFloat(opts.amount) : undefined);
+    }
+    
+    console.log(formatOutput({
+      protocol: opts.protocol,
+      from: opts.from,
+      to: opts.to,
+      amount: opts.amount || 'variable',
+      url,
+    }, getFormat()));
+  });
+
+buildCmd
+  .command('deposit')
+  .description('Build a Kamino deposit URL')
+  .requiredOption('--vault <slug>', 'Vault slug (e.g., usdc-prime, sol-main)')
+  .option('--amount <amount>', 'Amount to deposit')
+  .action((opts) => {
+    const url = buildKaminoDepositUrl(opts.vault, opts.amount ? parseFloat(opts.amount) : undefined);
+    console.log(formatOutput({ vault: opts.vault, amount: opts.amount || 'variable', url }, getFormat()));
+  });
+
+buildCmd
+  .command('withdraw')
+  .description('Build a Kamino withdraw URL')
+  .requiredOption('--vault <slug>', 'Vault slug')
+  .option('--amount <amount>', 'Amount to withdraw')
+  .action((opts) => {
+    const url = buildKaminoWithdrawUrl(opts.vault, opts.amount ? parseFloat(opts.amount) : undefined);
+    console.log(formatOutput({ vault: opts.vault, amount: opts.amount || 'variable', url }, getFormat()));
+  });
+
+buildCmd
+  .command('stake')
+  .description('Build a Jito stake URL')
+  .option('--amount <amount>', 'Amount of SOL to stake')
+  .action((opts) => {
+    const url = buildJitoStakeUrl(opts.amount ? parseFloat(opts.amount) : undefined);
+    console.log(formatOutput({ protocol: 'jito', amount: opts.amount || 'variable', url }, getFormat()));
+  });
+
+buildCmd
+  .command('nft-buy')
+  .description('Build an NFT buy URL')
+  .requiredOption('--mint <nftMint>', 'NFT mint address')
+  .option('--protocol <protocol>', 'Protocol: magiceden (default) or tensor', 'magiceden')
+  .action((opts) => {
+    let url: string;
+    
+    if (opts.protocol === 'tensor') {
+      url = buildTensorBuyFloorUrl(opts.mint); // For tensor, mint is collection slug
+    } else {
+      url = buildMagicEdenBuyUrl(opts.mint);
+    }
+    
+    console.log(formatOutput({ protocol: opts.protocol, mint: opts.mint, url }, getFormat()));
+  });
+
 // Parse and run
 program.parse();

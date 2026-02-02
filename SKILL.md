@@ -50,16 +50,17 @@ SOLANA_WALLET_PATH=~/.config/solana/my-wallet.json
 
 ## Protocol Status (Updated 2026-02-02)
 
-### ✅ Working
+### ✅ Working (7 protocols)
 
-| Protocol | Actions | Endpoint |
-|----------|---------|----------|
-| **Jupiter** | Swap any tokens | `worker.jup.ag` |
-| **Raydium** | Swap, LP | `share.raydium.io` |
-| **Kamino** | Deposit, withdraw, borrow, repay | `kamino.dial.to` |
-| **Jito** | Stake SOL | `jito.network`, `jito.dial.to` |
-| **Tensor** | Buy floor, bid on NFTs | `tensor.dial.to` |
-| **Drift** | Vault deposit/withdraw | `app.drift.trade` |
+| Protocol | Actions | Endpoint | Token Flexibility |
+|----------|---------|----------|-------------------|
+| **Jupiter** | Swap any tokens | `worker.jup.ag` | ✅ Any verified token |
+| **Raydium** | Swap, LP | `share.raydium.io` | ✅ Any token by mint |
+| **Kamino** | Deposit, withdraw, borrow | `kamino.dial.to` | 10 vaults available |
+| **Jito** | Stake SOL → jitoSOL | `jito.network` | SOL only |
+| **Tensor** | Buy floor, bid NFTs | `tensor.dial.to` | Any collection |
+| **Drift** | Vault deposit/withdraw | `app.drift.trade` | Multiple vaults |
+| **Magic Eden** | Buy NFTs, launchpad mint | `api-mainnet.magiceden.dev` | Any listed NFT |
 
 ### 🔑 Needs API Key
 
@@ -67,17 +68,77 @@ SOLANA_WALLET_PATH=~/.config/solana/my-wallet.json
 |----------|---------|-------|
 | **Lulo** | [dev.lulo.fi](https://dev.lulo.fi) | 24hr withdrawal cooldown |
 
-### ❌ Currently Broken
+### ⚠️ Web-Only (Cloudflare blocked)
 
 | Protocol | Issue | Workaround |
 |----------|-------|------------|
+| **Meteora** | API returns 404 from servers | Use browser / dial.to |
+| **MarginFi** | No public API found | Use their web UI |
+| **Sanctum** | Cloudflare blocks datacenter IPs | Use their web UI |
 | **Orca** | No public blink API | Use Jupiter or Raydium |
-| **Sanctum** | Cloudflare blocks server IPs | Use their web UI |
-| **Some dial.to** | Rate limiting | Try self-hosted endpoints |
 
-### ❓ Untested
+---
 
-MarginFi, Meteora, Helius, Magic Eden - endpoints exist but need verification.
+## Token & Market Discovery (NEW)
+
+### Find Any Token
+
+```bash
+# List 25+ common tokens with mint addresses
+blinks tokens list
+
+# Resolve symbol to mint
+blinks tokens resolve BONK
+# → DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263
+
+# Search all verified tokens (network call)
+blinks tokens search "dog"
+# → WIF, MYRO, etc.
+```
+
+### Available Vaults
+
+```bash
+# Kamino lending vaults
+blinks vaults kamino
+# → usdc-prime, sol-main, jitosol-main, etc.
+```
+
+### Build URLs for Any Token
+
+```bash
+# Swap SOL → any token (Jupiter)
+blinks build swap --from SOL --to WIF
+blinks build swap --from SOL --to BONK --amount 1
+
+# Swap with Raydium (requires amount)
+blinks build swap --from SOL --to JUP --amount 0.5 --protocol raydium
+
+# Kamino deposit/withdraw
+blinks build deposit --vault usdc-prime --amount 100
+blinks build withdraw --vault sol-main
+
+# Jito staking
+blinks build stake --amount 2
+
+# NFT purchases
+blinks build nft-buy --mint <nft-mint-address>
+blinks build nft-buy --mint madlads --protocol tensor
+```
+
+### Common Token Mints
+
+| Symbol | Mint Address |
+|--------|--------------|
+| SOL | `So11111111111111111111111111111111111111112` |
+| USDC | `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v` |
+| USDT | `Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB` |
+| jitoSOL | `J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn` |
+| JUP | `JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN` |
+| BONK | `DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263` |
+| WIF | `EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm` |
+
+Use `blinks tokens list` for the full list of 25+ tokens.
 
 ---
 
@@ -121,6 +182,8 @@ blinks execute "https://..." --amount=X
 
 ## SDK Usage
 
+### Basic Execution
+
 ```typescript
 import {
   ActionsClient,
@@ -161,6 +224,52 @@ if (!sim.success) {
 // 5. Execute
 const signature = await executor.signAndSend(tx, wallet.getSigner());
 console.log('Success:', `https://solscan.io/tx/${signature}`);
+```
+
+### Token Discovery & URL Building
+
+```typescript
+import {
+  // Token discovery
+  COMMON_TOKENS,
+  resolveTokenMint,
+  searchToken,
+  getJupiterTokenList,
+  
+  // Vault discovery
+  getKaminoLendVaults,
+  
+  // URL builders (any token support)
+  buildJupiterSwapUrl,
+  buildRaydiumSwapUrl,
+  buildKaminoDepositUrl,
+  buildMagicEdenBuyUrl,
+} from '@openclaw/solana-defi-agent-skill';
+
+// Get mint address for any token
+const bonkMint = COMMON_TOKENS.BONK;  // Known tokens
+const anyMint = resolveTokenMint('JUP');  // Resolve symbol → mint
+
+// Search for tokens
+const dogTokens = await searchToken('dog');  // WIF, MYRO, etc.
+
+// Build swap URL for any token pair
+const swapUrl = buildJupiterSwapUrl('SOL', 'BONK', 1);
+// → https://worker.jup.ag/blinks/swap/So111.../DezXA.../1
+
+// Works with symbols OR mint addresses
+const swapUrl2 = buildJupiterSwapUrl(
+  'So11111111111111111111111111111111111111112',
+  'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263',
+  0.5
+);
+
+// Get available vaults
+const vaults = getKaminoLendVaults();
+// → [{ slug: 'usdc-prime', name: 'USDC Prime', token: 'USDC' }, ...]
+
+// Build NFT buy URL
+const nftUrl = buildMagicEdenBuyUrl('GtQJmmYe...');
 ```
 
 ---

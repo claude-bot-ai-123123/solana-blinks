@@ -14,6 +14,8 @@ Execute Solana DeFi operations programmatically through [Solana Actions](https:/
 - ⚡ **Zero Config** - Works with just RPC URL and private key
 - 🔒 **Trust Verification** - Validates against trusted host registry
 - 🔧 **Full SDK** - Use as a library in your TypeScript projects
+- 🪙 **Any Token Support** - Swap/interact with any verified Solana token
+- 🔍 **Token Discovery** - Search 1000s of tokens, resolve symbols to mints
 
 ## Architecture
 
@@ -27,20 +29,21 @@ No Dialect API dependency - communicates directly with protocol action endpoints
 
 ## Supported Protocols
 
-| Protocol | Type | Status | Notes |
-|----------|------|--------|-------|
-| Kamino | Lending/Yield | ✅ Working | deposit, withdraw, borrow, repay |
-| Tensor | NFT | ✅ Working | buy-floor, bid |
-| Jito | Staking | ⚠️ Routing | actions.json works, Cloudflare blocks dial.to |
-| Meteora | DLMM | ⚠️ Partial | Has actions.json, needs pool params |
-| Drift | Perps | ⚠️ Partial | Has actions.json, deposit returns 500 |
-| Sanctum | LST Staking | 🔒 Blocked | Cloudflare blocks server IPs |
-| Jupiter | Swap | ❓ Unknown | Endpoint paths not discovered |
-| Orca | AMM | ❓ Unknown | Endpoint paths not discovered |
-| MarginFi | Lending | ❓ Unknown | Endpoint paths not discovered |
-| Raydium | AMM | ❓ Unknown | No actions.json found |
+| Protocol | Type | Status | Token Flexibility |
+|----------|------|--------|-------------------|
+| **Jupiter** | Swap | ✅ Working | Any verified token |
+| **Raydium** | AMM | ✅ Working | Any token by mint |
+| **Kamino** | Lending/Yield | ✅ Working | 10 vaults |
+| **Jito** | Staking | ✅ Working | SOL → jitoSOL |
+| **Tensor** | NFT | ✅ Working | Any collection |
+| **Drift** | Perps | ✅ Working | Multiple vaults |
+| **Magic Eden** | NFT | ✅ Working | Any listed NFT |
+| Meteora | DLMM | ⚠️ Web-only | Cloudflare blocks |
+| MarginFi | Lending | ⚠️ Web-only | No public API |
+| Sanctum | LST | 🔒 Blocked | Cloudflare blocks |
+| Orca | AMM | ❌ None | No public blink API |
 
-**Registry**: 964 trusted hosts available for arbitrary action execution.
+**Registry**: 900+ trusted hosts available for arbitrary action execution.
 
 See [docs/PROTOCOL-STATUS.md](./docs/PROTOCOL-STATUS.md) for detailed status.
 
@@ -130,6 +133,44 @@ blinks jito stake --amount=1
 
 # Raydium
 blinks raydium swap --input=<mint> --output=<mint> --amount=100
+```
+
+### Token & Market Discovery
+
+```bash
+# List common tokens with mint addresses
+blinks tokens list
+
+# Resolve symbol to mint address
+blinks tokens resolve BONK
+blinks tokens resolve JUP
+
+# Search verified tokens (network call)
+blinks tokens search "dog"
+
+# List Kamino vaults
+blinks vaults kamino
+```
+
+### Build URLs for Any Token
+
+```bash
+# Jupiter swap (any token pair)
+blinks build swap --from SOL --to WIF
+blinks build swap --from SOL --to BONK --amount 1
+
+# Raydium swap
+blinks build swap --from SOL --to JUP --amount 0.5 --protocol raydium
+
+# Kamino deposit
+blinks build deposit --vault usdc-prime --amount 100
+
+# Jito stake
+blinks build stake --amount 2
+
+# NFT buy
+blinks build nft-buy --mint <nft-mint>
+blinks build nft-buy --mint madlads --protocol tensor
 ```
 
 ### Utilities
