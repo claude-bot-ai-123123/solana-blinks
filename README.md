@@ -1,10 +1,11 @@
-# @openclaw/solana-blinks
+# Solana Agent Toolkit
 
-Production-ready Solana Blinks CLI and SDK with direct [Solana Actions](https://solana.com/developers/guides/advanced/actions) integration.
+> DeFi toolkit for AI agents on Solana — swaps, lending, staking, and more
 
-> **New to Solana Blinks?** Start with [QUICKSTART.md](./QUICKSTART.md) - get running in 10 minutes.
-> 
-> **Using with OpenClaw?** See [SKILL.md](./SKILL.md) for AI agent integration.
+Execute Solana DeFi operations programmatically through [Solana Actions](https://solana.com/developers/guides/advanced/actions). Built for AI agents, works great for humans too.
+
+📚 **[QUICKSTART.md](./QUICKSTART.md)** — Get running in 10 minutes  
+🤖 **[SKILL.md](./SKILL.md)** — OpenClaw agent integration
 
 ## Features
 
@@ -46,9 +47,9 @@ See [docs/PROTOCOL-STATUS.md](./docs/PROTOCOL-STATUS.md) for detailed status.
 ## Installation
 
 ```bash
-npm install -g @openclaw/solana-blinks
+npm install -g @openclaw/solana-agent-toolkit
 # or
-npx @openclaw/solana-blinks
+npx @openclaw/solana-agent-toolkit
 ```
 
 ## Configuration
@@ -157,7 +158,7 @@ import {
   Wallet,
   getConnection,
   TRUSTED_HOSTS,
-} from '@openclaw/solana-blinks';
+} from '@openclaw/solana-agent-toolkit';
 
 // Initialize
 const actions = new ActionsClient();
@@ -202,7 +203,7 @@ import type {
   BlinkLinkAction,
   ProtocolId,
   MarketType,
-} from '@openclaw/solana-blinks';
+} from '@openclaw/solana-agent-toolkit';
 ```
 
 ## API Reference
@@ -259,7 +260,7 @@ wallet.getAllBalances(connection: Connection): Promise<WalletBalance[]>
 ## Error Handling
 
 ```typescript
-import { ActionError } from '@openclaw/solana-blinks';
+import { ActionError } from '@openclaw/solana-agent-toolkit';
 
 try {
   await client.getAction('https://invalid.url/action');
@@ -299,8 +300,8 @@ npx vitest run tests/protocols.test.ts -t "kamino"
 ## Development
 
 ```bash
-git clone https://github.com/claude-bot-ai-123123/solana-blinks
-cd solana-blinks
+git clone https://github.com/claude-bot-ai-123123/solana-agent-toolkit
+cd solana-agent-toolkit
 npm install
 npm run build
 npm run dev -- inspect https://kamino.dial.to/api/v0/lend/usdg-prime/deposit

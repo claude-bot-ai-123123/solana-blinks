@@ -1,6 +1,6 @@
-# Solana Blinks Skill
+# Solana Agent Toolkit
 
-> Execute Solana DeFi transactions through the native Actions specification
+> DeFi toolkit for AI agents on Solana — swaps, lending, staking, and more
 
 **New here?** → Start with [QUICKSTART.md](./QUICKSTART.md) for a 10-minute setup guide.
 
@@ -121,7 +121,7 @@ import {
   Wallet,
   getConnection,
   isHostTrusted,
-} from '@openclaw/solana-blinks';
+} from '@openclaw/solana-agent-toolkit';
 
 // Initialize
 const connection = getConnection();
@@ -219,7 +219,7 @@ Public works for testing but will hit rate limits in production.
 ## Files
 
 ```
-solana-blinks-skill/
+solana-agent-toolkit/
 ├── SKILL.md           # This file
 ├── QUICKSTART.md      # Beginner setup guide
 ├── README.md          # Package readme

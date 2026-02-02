@@ -1,4 +1,4 @@
-# Solana Blinks Quickstart
+# Solana Agent Toolkit - Quickstart
 
 > From zero to your first DeFi transaction in 10 minutes
 
@@ -59,9 +59,9 @@ solana balance -k ~/.config/solana/my-wallet.json
 ## Step 3: Set Up Environment
 
 ```bash
-# Clone/install the skill
+# Clone/install the toolkit
 cd your-project
-npm install @openclaw/solana-blinks
+npm install @openclaw/solana-agent-toolkit
 
 # Create environment file
 cat > .env << 'EOF'
@@ -80,13 +80,13 @@ EOF
 
 ---
 
-## Step 4: Your First Blink
+## Step 4: Your First Transaction
 
-Let's inspect a blink before executing anything:
+Let's inspect an action before executing anything:
 
 ```bash
 # See what a Kamino deposit looks like
-npx blinks inspect "https://kamino.dial.to/api/v0/lend/usdc-main/deposit"
+npx solana-toolkit inspect "https://kamino.dial.to/api/v0/lend/usdc-main/deposit"
 ```
 
 Output shows:
@@ -101,7 +101,7 @@ Output shows:
 **Always dry-run first:**
 ```bash
 # Simulate without sending
-npx blinks execute "https://kamino.dial.to/api/v0/lend/usdc-main/deposit" \
+npx solana-toolkit execute "https://kamino.dial.to/api/v0/lend/usdc-main/deposit" \
   --amount=1 \
   --dry-run
 ```
@@ -109,7 +109,7 @@ npx blinks execute "https://kamino.dial.to/api/v0/lend/usdc-main/deposit" \
 If simulation succeeds:
 ```bash
 # Execute for real
-npx blinks execute "https://kamino.dial.to/api/v0/lend/usdc-main/deposit" \
+npx solana-toolkit execute "https://kamino.dial.to/api/v0/lend/usdc-main/deposit" \
   --amount=1
 ```
 
@@ -185,24 +185,24 @@ spl-token accounts
 
 ### Deposit USDC to Kamino for yield
 ```bash
-blinks kamino deposit --vault=usdc-main --amount=100
+solana-toolkit kamino deposit --vault=usdc-main --amount=100
 ```
 
 ### Stake SOL with Jito
 ```bash
-blinks jito stake --amount=1
+solana-toolkit jito stake --amount=1
 ```
 
 ### Check available vaults
 ```bash
-blinks inspect "https://kamino.dial.to/api/v0/lend"
+solana-toolkit inspect "https://kamino.dial.to/api/v0/lend"
 ```
 
 ---
 
 ## Getting Help
 
-- **Inspect any URL:** `blinks inspect <url>` shows what's possible
+- **Inspect any URL:** `solana-toolkit inspect <url>` shows what's possible
 - **Check protocol status:** See the table above or run tests
 - **Solana Discord:** [discord.gg/solana](https://discord.gg/solana)
 - **Dialect Docs:** [docs.dialect.to](https://docs.dialect.to)
@@ -211,7 +211,7 @@ blinks inspect "https://kamino.dial.to/api/v0/lend"
 
 ## Next Steps
 
-1. Explore different protocols with `blinks inspect`
+1. Explore different protocols with `solana-toolkit inspect`
 2. Build automations using the SDK (see SKILL.md)
 3. Set up better RPC for reliability
 4. Check the [Dialect Registry](https://actions-registry.dial.to/all) for 900+ trusted hosts

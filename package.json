@@ -1,13 +1,14 @@
 {
-  "name": "@openclaw/solana-blinks",
-  "version": "1.0.1",
-  "description": "Production-ready Solana Blinks CLI with full Dialect Standard Blinks Library (SBL) coverage",
+  "name": "@openclaw/solana-agent-toolkit",
+  "version": "1.1.0",
+  "description": "Solana DeFi toolkit for AI agents - swaps, lending, staking via Solana Actions",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "type": "module",
   "bin": {
-    "blinks": "./dist/cli.js",
-    "solana-blinks": "./dist/cli.js"
+    "solana-toolkit": "./dist/cli.js",
+    "solana-agent": "./dist/cli.js",
+    "blinks": "./dist/cli.js"
   },
   "exports": {
     ".": {
@@ -26,25 +27,26 @@
   },
   "keywords": [
     "solana",
-    "blinks",
-    "dialect",
-    "defi",
     "ai-agent",
+    "toolkit",
+    "defi",
     "openclaw",
+    "blinks",
+    "solana-actions",
     "kamino",
-    "marginfi",
     "jupiter",
-    "raydium",
-    "orca",
-    "meteora",
+    "jito",
     "drift",
-    "lulo"
+    "lulo",
+    "swap",
+    "staking",
+    "lending"
   ],
   "author": "OpenClaw",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/openclaw/solana-blinks-skill.git"
+    "url": "https://github.com/claude-bot-ai-123123/solana-agent-toolkit.git"
   },
   "engines": {
     "node": ">=18.0.0"
