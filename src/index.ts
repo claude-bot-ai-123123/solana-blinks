@@ -90,8 +90,9 @@ export {
   clearRegistryCache,
 } from './lib/registry.js';
 
-// Markets API - Dialect Standard Blinks Library
+// Markets API - Dialect Standard Blinks Library + Token Discovery
 export {
+  // Dialect Markets API
   MarketsClient,
   createMarketsClient,
   getMarkets,
@@ -99,6 +100,22 @@ export {
   findBestYield,
   type DialectMarket,
   type DialectPosition,
+  // Token Discovery
+  COMMON_TOKENS,
+  resolveTokenMint,
+  getJupiterTokenList,
+  searchToken,
+  // Vault Discovery
+  KAMINO_LEND_VAULTS,
+  getKaminoLendVaults,
+  // URL Builders (any token support)
+  buildJupiterSwapUrl,
+  buildRaydiumSwapUrl,
+  buildKaminoDepositUrl,
+  buildKaminoWithdrawUrl,
+  buildJitoStakeUrl,
+  buildMagicEdenBuyUrl,
+  buildTensorBuyFloorUrl,
 } from './lib/markets.js';
 
 // Legacy export for backward compatibility (deprecated)

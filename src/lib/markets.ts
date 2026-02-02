@@ -1,17 +1,17 @@
 /**
- * Dialect Markets API Client
- * Fetch market data and blink URLs from Dialect's Standard Blinks Library
+ * Markets & Token Discovery
  * 
- * Docs: https://docs.dialect.to/markets
- * 
- * The Markets API aggregates data from multiple DeFi protocols and provides
- * ready-to-use blink URLs for actions like deposit, withdraw, etc.
+ * Two main parts:
+ * 1. Dialect Markets API Client - fetch market data and blink URLs
+ * 2. Token Discovery - find tokens, vaults, and build swap URLs
  */
 
 import type { Market, Position, ProtocolId, MarketType, YieldMarket } from '../types/index.js';
 
-// Base URL for the Dialect Markets API
-// Note: The exact base URL needs to be confirmed from the Dialect docs
+// ============================================
+// Part 1: Dialect Markets API Client
+// ============================================
+
 const MARKETS_API_BASE = 'https://api.dialect.to/v1';
 
 /**
@@ -154,9 +154,6 @@ export class MarketsClient {
     }
   }
 
-  /**
-   * List all markets
-   */
   async listMarkets(options?: {
     provider?: ProtocolId;
     type?: MarketType;
@@ -173,17 +170,6 @@ export class MarketsClient {
     return response.markets;
   }
 
-  /**
-   * List markets grouped by type
-   */
-  async listMarketsGrouped(): Promise<Record<MarketType, DialectMarket[]>> {
-    const response = await this.fetch<{ groups: Record<MarketType, DialectMarket[]> }>('/markets/grouped');
-    return response.groups;
-  }
-
-  /**
-   * Get positions for a wallet address
-   */
   async getPositions(walletAddress: string, options?: {
     provider?: ProtocolId;
     type?: MarketType;
@@ -196,26 +182,6 @@ export class MarketsClient {
     return response.positions;
   }
 
-  /**
-   * Get historical position snapshots
-   */
-  async getPositionHistory(walletAddress: string, options?: {
-    startDate?: string;
-    endDate?: string;
-    provider?: ProtocolId;
-  }): Promise<DialectPosition[]> {
-    const params: Record<string, string> = { wallet: walletAddress };
-    if (options?.startDate) params.startDate = options.startDate;
-    if (options?.endDate) params.endDate = options.endDate;
-    if (options?.provider) params.provider = options.provider;
-
-    const response = await this.fetch<PositionsResponse>('/positions/history', params);
-    return response.positions;
-  }
-
-  /**
-   * Find the best yield markets for a token
-   */
   async findBestYield(tokenSymbol: string, options?: {
     minApy?: number;
     minTvl?: number;
@@ -236,80 +202,18 @@ export class MarketsClient {
       .sort((a, b) => b.depositApy - a.depositApy);
   }
 
-  /**
-   * Get blink URL for a market action
-   */
   getBlinkUrl(market: DialectMarket, action: 'deposit' | 'withdraw' | 'borrow' | 'repay' | 'claimRewards'): string | null {
     const actionData = market.actions[action];
     if (!actionData) return null;
-    
-    // Remove the 'blink:' prefix if present
     const blinkUrl = actionData.blinkUrl;
-    if (blinkUrl.startsWith('blink:')) {
-      return blinkUrl.slice(6);
-    }
-    return blinkUrl;
-  }
-
-  /**
-   * Convert Dialect market to our internal YieldMarket type
-   */
-  toInternalMarket(market: DialectMarket): YieldMarket {
-    return {
-      id: market.id,
-      type: 'yield',
-      provider: {
-        id: market.provider.id as ProtocolId,
-        name: market.provider.name,
-        icon: market.provider.icon,
-      },
-      token: {
-        address: market.token.address,
-        symbol: market.token.symbol,
-        decimals: market.token.decimals,
-        icon: market.token.icon,
-      },
-      websiteUrl: market.websiteUrl,
-      depositApy: market.depositApy,
-      baseDepositApy: market.baseDepositApy,
-      baseDepositApy30d: market.baseDepositApy30d,
-      baseDepositApy90d: market.baseDepositApy90d,
-      baseDepositApy180d: market.baseDepositApy180d,
-      totalDeposit: market.totalDeposit,
-      totalDepositUsd: market.totalDepositUsd,
-      maxDeposit: market.maxDeposit,
-      rewards: market.rewards?.map(r => ({
-        type: r.type as 'deposit' | 'borrow',
-        apy: r.apy,
-        token: {
-          address: r.token.address,
-          symbol: r.token.symbol,
-          decimals: r.token.decimals,
-          icon: r.token.icon,
-        },
-        marketAction: r.marketAction,
-      })),
-      actions: {
-        deposit: market.actions.deposit,
-        withdraw: market.actions.withdraw,
-        claimRewards: market.actions.claimRewards,
-      },
-    };
+    return blinkUrl.startsWith('blink:') ? blinkUrl.slice(6) : blinkUrl;
   }
 }
 
-/**
- * Create a MarketsClient instance
- */
 export function createMarketsClient(options?: { baseUrl?: string; timeout?: number }): MarketsClient {
   return new MarketsClient(options);
 }
 
-// Convenience functions
-
-/**
- * Get all markets
- */
 export async function getMarkets(options?: {
   provider?: ProtocolId;
   type?: MarketType;
@@ -319,20 +223,264 @@ export async function getMarkets(options?: {
   return client.listMarkets(options);
 }
 
-/**
- * Get positions for a wallet
- */
 export async function getPositions(walletAddress: string): Promise<DialectPosition[]> {
   const client = createMarketsClient();
   return client.getPositions(walletAddress);
 }
 
-/**
- * Find best yield for a token
- */
 export async function findBestYield(tokenSymbol: string): Promise<DialectMarket[]> {
   const client = createMarketsClient();
   return client.findBestYield(tokenSymbol);
 }
 
-export default MarketsClient;
+// ============================================
+// Part 2: Token Discovery & URL Builders
+// ============================================
+
+export interface Token {
+  symbol: string;
+  name: string;
+  address: string;
+  decimals: number;
+  logoURI?: string;
+  tags?: string[];
+}
+
+/**
+ * Common token mint addresses for quick reference
+ */
+export const COMMON_TOKENS: Record<string, string> = {
+  // Native
+  SOL: 'So11111111111111111111111111111111111111112',
+  
+  // Stablecoins
+  USDC: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+  USDT: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',
+  PYUSD: '2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo',
+  UXD: '7kbnvuGBxxj8AG9qp8Scn56muWGaRaFqxg1FsRp3PaFT',
+  
+  // LSTs
+  jitoSOL: 'J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn',
+  mSOL: 'mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So',
+  bSOL: 'bSo13r4TkiE4KumL71LsHTPpL2euBYLFx6h9HP3piy1',
+  INF: '5oVNBeEEQvYi1cX3ir8Dx5n1P7pdxydbGF2X4TxVusJm',
+  
+  // DeFi
+  JUP: 'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN',
+  RAY: '4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R',
+  ORCA: 'orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE',
+  MNDE: 'MNDEFzGvMt87ueuHvVU9VcTqsAP5b3fTGPsHuuPA5ey',
+  JLP: '27G8MtK7VtTcCHkpASjSDdkWWYfoqT6ggEuKidVJidD4',
+  
+  // Meme
+  BONK: 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263',
+  WIF: 'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm',
+  POPCAT: '7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr',
+  MYRO: 'HhJpBhRRn4g56VsyLuT8DL5Bv31HkXqsrahTTUCZeZg4',
+  
+  // Infrastructure  
+  PYTH: 'HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3',
+  HNT: 'hntyVP6YFm1Hg25TN9WGLqM12b8TQmcknKrdu1oxWux',
+  RENDER: 'rndrizKT3MK1iimdxRdWabcF7Zg7AR5T4nud4EkHBof',
+  W: '85VBFQZC9TZkfaptBWjvUw7YbZjy52A6mjtPGjstQAmQ',
+};
+
+/**
+ * Resolve a token symbol or mint to a mint address
+ */
+export function resolveTokenMint(tokenOrMint: string): string {
+  // If it's a known symbol, return the mint
+  const upper = tokenOrMint.toUpperCase();
+  if (COMMON_TOKENS[upper]) {
+    return COMMON_TOKENS[upper];
+  }
+  // Otherwise assume it's already a mint address
+  return tokenOrMint;
+}
+
+/**
+ * Get Jupiter token list (verified tokens)
+ */
+export async function getJupiterTokenList(type: 'strict' | 'all' = 'strict'): Promise<Token[]> {
+  const url = type === 'strict' 
+    ? 'https://token.jup.ag/strict'
+    : 'https://token.jup.ag/all';
+  
+  const response = await fetch(url, {
+    headers: { 'Accept': 'application/json' },
+    signal: AbortSignal.timeout(15000),
+  });
+  
+  if (!response.ok) {
+    throw new Error(`Failed to fetch Jupiter token list: ${response.status}`);
+  }
+  
+  return response.json() as Promise<Token[]>;
+}
+
+/**
+ * Search for a token by symbol or name
+ */
+export async function searchToken(query: string): Promise<Token[]> {
+  const tokens = await getJupiterTokenList('strict');
+  const q = query.toLowerCase();
+  
+  return tokens.filter(t => 
+    t.symbol.toLowerCase().includes(q) ||
+    t.name.toLowerCase().includes(q) ||
+    t.address.toLowerCase() === q
+  ).slice(0, 20);
+}
+
+// ============================================
+// Kamino Vaults
+// ============================================
+
+export const KAMINO_LEND_VAULTS: Record<string, { name: string; token: string }> = {
+  'usdc-prime': { name: 'USDC Prime', token: 'USDC' },
+  'usdc-main': { name: 'USDC Main', token: 'USDC' },
+  'sol-main': { name: 'SOL Main', token: 'SOL' },
+  'sol-jlp': { name: 'SOL JLP', token: 'SOL' },
+  'jlp-core': { name: 'JLP Core', token: 'JLP' },
+  'usdt-main': { name: 'USDT Main', token: 'USDT' },
+  'jitosol-main': { name: 'jitoSOL Main', token: 'jitoSOL' },
+  'msol-main': { name: 'mSOL Main', token: 'mSOL' },
+  'bsol-main': { name: 'bSOL Main', token: 'bSOL' },
+  'pyusd-main': { name: 'PYUSD Main', token: 'PYUSD' },
+};
+
+export function getKaminoLendVaults(): Array<{ slug: string; name: string; token: string }> {
+  return Object.entries(KAMINO_LEND_VAULTS).map(([slug, info]) => ({
+    slug,
+    ...info,
+  }));
+}
+
+// ============================================
+// URL Builders - Any Token Support
+// ============================================
+
+/**
+ * Build a Jupiter swap URL - supports ANY verified token
+ * @param inputToken - Symbol (SOL, USDC) or mint address
+ * @param outputToken - Symbol or mint address
+ * @param amount - Optional amount to swap
+ */
+export function buildJupiterSwapUrl(
+  inputToken: string, 
+  outputToken: string, 
+  amount?: number
+): string {
+  const base = 'https://worker.jup.ag/blinks/swap';
+  
+  // Check if both are known symbols for cleaner URL
+  const inputUpper = inputToken.toUpperCase();
+  const outputUpper = outputToken.toUpperCase();
+  
+  if (COMMON_TOKENS[inputUpper] && COMMON_TOKENS[outputUpper]) {
+    // Use symbol format: SOL-USDC
+    if (amount) {
+      const inputMint = COMMON_TOKENS[inputUpper];
+      const outputMint = COMMON_TOKENS[outputUpper];
+      return `${base}/${inputMint}/${outputMint}/${amount}`;
+    }
+    return `${base}/${inputUpper}-${outputUpper}`;
+  }
+  
+  // Use mint addresses
+  const inputMint = resolveTokenMint(inputToken);
+  const outputMint = resolveTokenMint(outputToken);
+  
+  if (amount) {
+    return `${base}/${inputMint}/${outputMint}/${amount}`;
+  }
+  return `${base}/${inputMint}-${outputMint}`;
+}
+
+/**
+ * Build a Raydium swap URL - supports ANY token by mint
+ * @param inputMint - Input token (symbol or mint)
+ * @param outputMint - Output token (symbol or mint)
+ * @param amount - Amount to swap
+ */
+export function buildRaydiumSwapUrl(
+  inputMint: string,
+  outputMint: string,
+  amount: number
+): string {
+  const input = resolveTokenMint(inputMint);
+  const output = resolveTokenMint(outputMint);
+  return `https://share.raydium.io/dialect/actions/swap/tx?inputMint=${input}&outputMint=${output}&amount=${amount}`;
+}
+
+/**
+ * Build a Kamino deposit URL
+ */
+export function buildKaminoDepositUrl(vaultSlug: string, amount?: number): string {
+  const base = `https://kamino.dial.to/api/v0/lend/${vaultSlug}/deposit`;
+  return amount ? `${base}?amount=${amount}` : base;
+}
+
+/**
+ * Build a Kamino withdraw URL
+ */
+export function buildKaminoWithdrawUrl(vaultSlug: string, amount?: number): string {
+  const base = `https://kamino.dial.to/api/v0/lend/${vaultSlug}/withdraw`;
+  return amount ? `${base}?amount=${amount}` : base;
+}
+
+/**
+ * Build a Jito stake URL
+ */
+export function buildJitoStakeUrl(amount?: number): string {
+  if (amount) {
+    return `https://jito.network/stake/amount/${amount}`;
+  }
+  return 'https://jito.network/stake';
+}
+
+/**
+ * Build a Magic Eden buy URL
+ */
+export function buildMagicEdenBuyUrl(nftMint: string): string {
+  return `https://api-mainnet.magiceden.dev/actions/buyNow/${nftMint}`;
+}
+
+/**
+ * Build a Tensor floor buy URL
+ */
+export function buildTensorBuyFloorUrl(collection: string): string {
+  return `https://tensor.dial.to/buy-floor/${collection}`;
+}
+
+// ============================================
+// Exports
+// ============================================
+
+export default {
+  // Dialect Markets API
+  MarketsClient,
+  createMarketsClient,
+  getMarkets,
+  getPositions,
+  findBestYield,
+  
+  // Token discovery
+  COMMON_TOKENS,
+  resolveTokenMint,
+  getJupiterTokenList,
+  searchToken,
+  
+  // Vaults
+  KAMINO_LEND_VAULTS,
+  getKaminoLendVaults,
+  
+  // URL builders
+  buildJupiterSwapUrl,
+  buildRaydiumSwapUrl,
+  buildKaminoDepositUrl,
+  buildKaminoWithdrawUrl,
+  buildJitoStakeUrl,
+  buildMagicEdenBuyUrl,
+  buildTensorBuyFloorUrl,
+};
