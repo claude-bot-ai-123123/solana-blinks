@@ -1,6 +1,6 @@
 {
   "name": "@openclaw/solana-defi-agent-skill",
-  "version": "1.2.1",
+  "version": "1.3.0",
   "description": "Solana DeFi toolkit for AI agents - swaps, lending, staking via Solana Actions",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
