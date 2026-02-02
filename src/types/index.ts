@@ -19,7 +19,8 @@ export type ProtocolId =
   | 'save'
   | 'defituna'
   | 'deficarrot'
-  | 'dflow';
+  | 'dflow'
+  | 'magiceden';
 
 export type MarketType = 'lending' | 'yield' | 'loop' | 'perpetual' | 'prediction';
 

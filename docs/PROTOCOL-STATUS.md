@@ -1,15 +1,15 @@
 # Protocol Status
 
-> Last tested: 2026-02-01
+> Last tested: 2026-02-02
 
 ## Summary
 
 | Status | Count | Protocols |
 |--------|-------|-----------|
-| ✅ Working | 6 | Jupiter, Raydium, Kamino, Jito, Tensor, Drift |
+| ✅ Working | 7 | Jupiter, Raydium, Kamino, Jito, Tensor, Drift, Magic Eden |
 | 🔑 Needs Key | 1 | Lulo |
-| ❌ Broken | 3 | Orca, Sanctum, some dial.to |
-| ❓ Untested | 4 | MarginFi, Meteora, Helius, Magic Eden |
+| ⚠️ Web-Only | 3 | Meteora, MarginFi, Helius |
+| ❌ Broken | 2 | Orca, Sanctum (Cloudflare) |
 
 ---
 
@@ -106,6 +106,27 @@ blinks execute "https://jito.network/stake" --amount=1
 
 ---
 
+### Magic Eden
+**Status:** Working  
+**Endpoint:** `api-mainnet.magiceden.dev`
+
+| Action | Path | Tested |
+|--------|------|--------|
+| Buy NFT | `/actions/buyNow/{nftMint}` | ✅ |
+| Mint Launchpad | `/actions/mint-launchpad/{slug}` | ⚠️ Needs testing |
+
+**Example:**
+```bash
+# Get buy action for an NFT
+curl "https://api-mainnet.magiceden.dev/actions/buyNow/GtQJmmYeSFjxpfaeq7fhR3ZEtZd5Qk7aXBkf4NGEYQjR"
+
+# Returns: icon, title, description, and buy action with current price
+```
+
+**Note:** Requires specific NFT mint address. Get listings via ME API first.
+
+---
+
 ## 🔑 Needs API Key
 
 ### Lulo Finance
@@ -166,7 +187,7 @@ These protocols have blinks but only work via browser/dial.to interstitial:
 | **Meteora** | `meteora.dial.to` | Token launch, DLMM | API returns 404 from servers. Use browser. |
 | **MarginFi** | `marginfi.dial.to` | Lend, borrow | No public API endpoints found |
 | **Helius** | `helius.dial.to` | Staking | 404 on actions.json |
-| **Magic Eden** | `api-mainnet.magiceden.dev` | NFT trading | Needs specific item paths |
+| **Magic Eden** | `api-mainnet.magiceden.dev` | NFT buy, launchpad mint | ✅ Moved to Working |
 
 ## ❓ Untested Protocols
 

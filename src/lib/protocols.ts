@@ -259,12 +259,15 @@ export const PROTOCOL_ACTION_ENDPOINTS: Record<string, {
     displayName: 'Magic Eden',
     category: 'nft',
     website: 'https://magiceden.io',
-    status: 'partial',
+    status: 'working',
     actions: {
-      'buy': 'https://api-mainnet.magiceden.dev/v2/actions/buy/{item}',
+      // NFT Buy - requires NFT mint address
+      'buy-now': 'https://api-mainnet.magiceden.dev/actions/buyNow/{nftMint}',
+      // Launchpad Mint - requires launchpad slug
+      'mint-launchpad': 'https://api-mainnet.magiceden.dev/actions/mint-launchpad/{launchpadSlug}',
     },
-    trustedHosts: ['api-mainnet.magiceden.dev', 'magiceden.dev'],
-    notes: 'Needs specific item parameters.',
+    trustedHosts: ['api-mainnet.magiceden.dev', 'magiceden.io', 'magiceden.us'],
+    notes: 'Working! buyNow needs NFT mint address. Returns action with current price.',
   },
 };
 
@@ -426,6 +429,18 @@ export const PROTOCOLS: Record<ProtocolId, {
     marketsApiSupported: true,
     positionsApiSupported: true,
     directActionsAvailable: false,
+  },
+  magiceden: {
+    name: 'magiceden',
+    displayName: 'Magic Eden',
+    category: 'nft',
+    website: 'https://magiceden.io',
+    marketTypes: [],
+    actions: ['buy-now', 'mint-launchpad'],
+    blinksSupported: true,
+    marketsApiSupported: false,
+    positionsApiSupported: false,
+    directActionsAvailable: true,
   },
 };
 
@@ -691,7 +706,50 @@ export function createProtocolHandlers(
     defituna: new ProtocolHandler('defituna', actionsClient, blinks),
     deficarrot: new ProtocolHandler('deficarrot', actionsClient, blinks),
     dflow: new ProtocolHandler('dflow', actionsClient, blinks),
+    magiceden: new MagicEdenHandler(actionsClient, blinks),
   };
+}
+
+/**
+ * Magic Eden Handler - NFT Buy & Launchpad Mint
+ */
+export class MagicEdenHandler extends ProtocolHandler {
+  constructor(actionsClient: ActionsClient, blinks: BlinksExecutor) {
+    super('magiceden', actionsClient, blinks);
+  }
+
+  /**
+   * Get NFT buy action metadata
+   */
+  async getBuyNowAction(nftMint: string) {
+    const url = `https://api-mainnet.magiceden.dev/actions/buyNow/${nftMint}`;
+    return this.actionsClient.getAction(url);
+  }
+
+  /**
+   * Get buy transaction for an NFT
+   */
+  async getBuyNowTransaction(nftMint: string, walletAddress: string, price?: number) {
+    const baseUrl = `https://api-mainnet.magiceden.dev/actions/buyNow/${nftMint}`;
+    const url = price ? `${baseUrl}?price=${price}` : baseUrl;
+    return this.actionsClient.postAction(url, walletAddress);
+  }
+
+  /**
+   * Get launchpad mint action metadata
+   */
+  async getMintLaunchpadAction(launchpadSlug: string) {
+    const url = `https://api-mainnet.magiceden.dev/actions/mint-launchpad/${launchpadSlug}`;
+    return this.actionsClient.getAction(url);
+  }
+
+  /**
+   * Get mint transaction for a launchpad
+   */
+  async getMintLaunchpadTransaction(launchpadSlug: string, walletAddress: string) {
+    const url = `https://api-mainnet.magiceden.dev/actions/mint-launchpad/${launchpadSlug}`;
+    return this.actionsClient.postAction(url, walletAddress);
+  }
 }
 
 export default PROTOCOLS;
