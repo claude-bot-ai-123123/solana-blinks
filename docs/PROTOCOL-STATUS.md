@@ -6,14 +6,46 @@
 
 | Status | Count | Protocols |
 |--------|-------|-----------|
-| ✅ Working | 4 | Kamino, Jito, Tensor, Drift |
-| 🔑 Needs Key | 2 | Lulo, Jupiter |
-| ❌ Broken | 2 | Sanctum, some dial.to |
-| ❓ Untested | 6 | MarginFi, Orca, Meteora, Helius, Raydium, Magic Eden |
+| ✅ Working | 6 | Jupiter, Raydium, Kamino, Jito, Tensor, Drift |
+| 🔑 Needs Key | 1 | Lulo |
+| ❌ Broken | 3 | Orca, Sanctum, some dial.to |
+| ❓ Untested | 4 | MarginFi, Meteora, Helius, Magic Eden |
 
 ---
 
 ## ✅ Working Protocols
+
+### Jupiter
+**Status:** Fully working  
+**Endpoint:** `worker.jup.ag`
+
+| Action | Path | Tested |
+|--------|------|--------|
+| Swap | `/blinks/swap/{FROM}-{TO}` | ✅ |
+| Swap with amount | `/blinks/swap/{inputMint}/{outputMint}/{amount}` | ✅ |
+
+**Example:**
+```bash
+solana-toolkit execute "https://worker.jup.ag/blinks/swap/SOL-USDC" --amount=0.1
+```
+
+---
+
+### Raydium
+**Status:** Fully working  
+**Endpoint:** `share.raydium.io`
+
+| Action | Path | Tested |
+|--------|------|--------|
+| Swap info | `/dialect/actions/swap/info` | ✅ |
+| Swap tx | `/dialect/actions/swap/tx?outputMint={mint}&amount={amount}` | ✅ |
+
+**Example:**
+```bash
+solana-toolkit execute "https://share.raydium.io/dialect/actions/swap/info"
+```
+
+---
 
 ### Kamino Finance
 **Status:** Fully working  
@@ -94,17 +126,17 @@ x-api-key: YOUR_LULO_API_KEY
 
 ---
 
-### Jupiter
-**Status:** Requires paid API key (as of Jan 2026)  
-**Get key:** [portal.jup.ag](https://portal.jup.ag)
+## ❌ Broken Protocols
 
-The free tier was deprecated in January 2026. Paid plans start at $XXX/month.
+### Orca
+**Status:** No public blink API  
+**Endpoint:** `orca.dial.to` returns 404
 
-**Alternative:** Use Raydium for swaps (if working) or Orca.
+Orca doesn't expose a public Solana Actions endpoint. The dial.to subdomain doesn't work.
+
+**Workaround:** Use Jupiter or Raydium for swaps instead.
 
 ---
-
-## ❌ Broken Protocols
 
 ### Sanctum
 **Status:** Blocked by Cloudflare  
@@ -132,10 +164,8 @@ These protocols have dial.to endpoints but haven't been verified:
 | Protocol | Endpoint | Expected Actions |
 |----------|----------|-----------------|
 | MarginFi | `marginfi.dial.to` | Lend, borrow |
-| Orca | `orca.dial.to` | Swap, LP |
 | Meteora | `meteora.dial.to` | DLMM, bonding curves |
 | Helius | `helius.dial.to` | Staking |
-| Raydium | `share.raydium.io` | Swap, LP |
 | Magic Eden | `magiceden.dial.to` | NFT trading |
 
 To test a protocol:

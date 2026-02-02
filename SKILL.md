@@ -43,12 +43,14 @@ SOLANA_WALLET_PATH=~/.config/solana/my-wallet.json
 
 ---
 
-## Protocol Status (Updated 2026-02-01)
+## Protocol Status (Updated 2026-02-02)
 
 ### ✅ Working
 
 | Protocol | Actions | Endpoint |
 |----------|---------|----------|
+| **Jupiter** | Swap any tokens | `worker.jup.ag` |
+| **Raydium** | Swap, LP | `share.raydium.io` |
 | **Kamino** | Deposit, withdraw, borrow, repay | `kamino.dial.to` |
 | **Jito** | Stake SOL | `jito.network`, `jito.dial.to` |
 | **Tensor** | Buy floor, bid on NFTs | `tensor.dial.to` |
@@ -59,18 +61,18 @@ SOLANA_WALLET_PATH=~/.config/solana/my-wallet.json
 | Protocol | Get Key | Notes |
 |----------|---------|-------|
 | **Lulo** | [dev.lulo.fi](https://dev.lulo.fi) | 24hr withdrawal cooldown |
-| **Jupiter** | [portal.jup.ag](https://portal.jup.ag) | Free tier deprecated Jan 2026 |
 
 ### ❌ Currently Broken
 
 | Protocol | Issue | Workaround |
 |----------|-------|------------|
+| **Orca** | No public blink API | Use Jupiter or Raydium |
 | **Sanctum** | Cloudflare blocks server IPs | Use their web UI |
 | **Some dial.to** | Rate limiting | Try self-hosted endpoints |
 
 ### ❓ Untested
 
-MarginFi, Orca, Meteora, Helius, Raydium - endpoints exist but need verification.
+MarginFi, Meteora, Helius, Magic Eden - endpoints exist but need verification.
 
 ---
 
